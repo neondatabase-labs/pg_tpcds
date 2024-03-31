@@ -1,5 +1,0 @@
-# pg_pretty_printer extension
-comment = 'pretty printer functions, APIs for gdb'
-default_version = '1.0'
-module_pathname = '$libdir/pg_pretty_printer'
-relocatable = true
