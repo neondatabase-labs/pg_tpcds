@@ -1,1 +1,3 @@
 build/
+src/tpcds/include/queries/
+src/tpcds/include/schema/

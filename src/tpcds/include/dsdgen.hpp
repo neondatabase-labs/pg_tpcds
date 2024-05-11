@@ -11,20 +11,16 @@ class ClientContext;
 namespace tpcds {
 
 struct DSDGenWrapper {
-  //! Create the TPC-DS tables in the given schema with the given suffix
-  static void CreateTPCDSSchema(duckdb::ClientContext &context,
-                                std::string catalog, std::string schema,
-                                std::string suffix, bool keys, bool overwrite);
   //! Generate the TPC-DS data of the given scale factor
-  static void DSDGen(double scale, duckdb::ClientContext &context,
-                     std::string catalog, std::string schema,
-                     std::string suffix);
+  static void DSDGen(double scale, bool overwrite);
 
   static uint32_t QueriesCount();
   //! Gets the specified TPC-DS Query number as a string
-  static const char * GetQuery(int query);
-  //! Returns the CSV answer of a TPC-DS query
-  static std::string GetAnswer(double sf, int query);
+  static const char *GetQuery(int query);
+
+  static void CreateTPCDSSchema(bool overwrite);
+
+  static void DropTPCDSSchema();
 };
 
 }  // namespace tpcds

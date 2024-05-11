@@ -49,6 +49,16 @@
     "streambuf": "cpp",
     "typeinfo": "cpp",
     "variant": "cpp",
-    "format": "cpp"
+    "format": "cpp",
+    "filesystem": "cpp",
+    "sstream": "cpp",
+    "chrono": "cpp",
+    "codecvt": "cpp",
+    "ratio": "cpp",
+    "iomanip": "cpp",
+    "istream": "cpp",
+    "fstream": "cpp",
+    "*.sql": "sql",
+    "ranges": "cpp"
   }
 }

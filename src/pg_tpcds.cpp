@@ -4,6 +4,7 @@ extern "C" {
 #include <fmgr.h>
 
 #include <access/htup_details.h>
+#include <executor/spi.h>
 #include <funcapi.h>
 #include <lib/stringinfo.h>
 #include <libpq/pqformat.h>
@@ -16,13 +17,24 @@ extern "C" {
 
 namespace tpcds {
 
-// static bool tpcds_prepare(bool overwrite) {
-//   return tpcds::TPCDSMain::tpcds_prepare(overwrite);
-// }
+static bool tpcds_prepare(bool overwrite) {
+  try {
+    tpcds::DSDGenWrapper::CreateTPCDSSchema(overwrite);
+  } catch (const std::exception& e) {
+    // error
+    return false;
+  }
+  return true;
+}
 
-// static bool tpcds_destroy() {
-//   return tpcds::TPCDSMain::tpcds_destroy();
-// }
+static bool tpcds_destroy() {
+  try {
+    tpcds::DSDGenWrapper::DropTPCDSSchema();
+  } catch (const std::exception& e) {
+    return false;
+  }
+  return true;
+}
 
 static const char* tpcds_queries(int qid) {
   return tpcds::DSDGenWrapper::GetQuery(qid);
@@ -32,38 +44,37 @@ static int tpcds_num_queries() {
   return tpcds::DSDGenWrapper::QueriesCount();
 }
 
+static bool dsdgen(double scale_factor, bool overwrite) {
+  try {
+    tpcds::DSDGenWrapper::DSDGen(scale_factor, overwrite);
+  } catch (const std::exception& e) {
+    return false;
+  }
+  return true;
+}
+
 }  // namespace tpcds
 
 extern "C" {
 
 PG_MODULE_MAGIC;
 
-/*
- *tpcds_prepare
- */
-/*
 PG_FUNCTION_INFO_V1(tpcds_prepare);
-
 Datum tpcds_prepare(PG_FUNCTION_ARGS) {
   bool overwrite = PG_GETARG_BOOL(0);
 
   bool result = tpcds::tpcds_prepare(overwrite);
 
-  PG_RETURN_POINTER(result);
+  PG_RETURN_BOOL(result);
 }
-*/
-/*
- *tpcds_prepare
- */
-/*
-PG_FUNCTION_INFO_V1(tpcds_destroy);
 
+PG_FUNCTION_INFO_V1(tpcds_destroy);
 Datum tpcds_destroy(PG_FUNCTION_ARGS) {
   bool result = tpcds::tpcds_destroy();
 
-  PG_RETURN_POINTER(result);
+  PG_RETURN_BOOL(result);
 }
-*/
+
 /*
  * tpcds_queries
  */
@@ -97,19 +108,14 @@ Datum tpcds_queries(PG_FUNCTION_ARGS) {
   return 0;
 }
 
-/*
 PG_FUNCTION_INFO_V1(dsdgen);
 
 Datum dsdgen(PG_FUNCTION_ARGS) {
   double sf = PG_GETARG_FLOAT8(0);
-  StringInfoData buf;
+  bool overwrite = PG_GETARG_BOOL(1);
 
-  pq_begintypsend(&buf);
-  pq_sendfloat8(&buf, quat->a);
-  pq_sendfloat8(&buf, quat->b);
-  pq_sendfloat8(&buf, quat->c);
-  pq_sendfloat8(&buf, quat->d);
-  PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
+  bool result = tpcds::dsdgen(sf, overwrite);
+
+  PG_RETURN_BOOL(result);
 }
-*/
 }
