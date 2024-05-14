@@ -1,8 +1,8 @@
 #pragma once
 
-#include "append_info-c.hpp"
-
 #include <cstdint>
+
+#include "append_info-c.hpp"
 
 namespace tpcds {
 
@@ -16,4 +16,4 @@ void ResetCountCount();
 tpcds_table_def GetTDefByNumber(int table_id);
 tpcds_builder_func GetTDefFunctionByNumber(int table_id);
 
-}; // namespace tpcds
+};  // namespace tpcds

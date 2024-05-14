@@ -17,27 +17,30 @@ extern "C" {
 
 namespace tpcds {
 
-static bool tpcds_prepare(bool overwrite) {
+static bool tpcds_prepare() {
   try {
-    tpcds::DSDGenWrapper::CreateTPCDSSchema(overwrite);
+    tpcds::DSDGenWrapper::CreateTPCDSSchema();
   } catch (const std::exception& e) {
-    // error
-    return false;
+    elog(ERROR, "TPC-DS Failed to prepare schema, get error: %s", e.what());
   }
   return true;
 }
 
-static bool tpcds_destroy() {
+static bool tpcds_cleanup() {
   try {
-    tpcds::DSDGenWrapper::DropTPCDSSchema();
+    tpcds::DSDGenWrapper::CleanUpTPCDSSchema();
   } catch (const std::exception& e) {
-    return false;
+    elog(ERROR, "TPC-DS Failed to cleanup, get error: %s", e.what());
   }
   return true;
 }
 
 static const char* tpcds_queries(int qid) {
-  return tpcds::DSDGenWrapper::GetQuery(qid);
+  try {
+    return tpcds::DSDGenWrapper::GetQuery(qid);
+  } catch (const std::exception& e) {
+    elog(ERROR, "TPC-DS Failed to get query, get error: %s", e.what());
+  }
 }
 
 static int tpcds_num_queries() {
@@ -53,6 +56,14 @@ static int tpcds_num_queries() {
 //   return true;
 // }
 
+static tpcds_runner_result** tpcds_runner(int qid) {
+  try {
+    return tpcds::DSDGenWrapper::RunTPCDS(qid);
+  } catch (const std::exception& e) {
+    elog(ERROR, "TPC-DS Failed to run query, get error: %s", e.what());
+  }
+}
+
 }  // namespace tpcds
 
 extern "C" {
@@ -61,16 +72,14 @@ PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(tpcds_prepare);
 Datum tpcds_prepare(PG_FUNCTION_ARGS) {
-  bool overwrite = PG_GETARG_BOOL(0);
-
-  bool result = tpcds::tpcds_prepare(overwrite);
+  bool result = tpcds::tpcds_prepare();
 
   PG_RETURN_BOOL(result);
 }
 
-PG_FUNCTION_INFO_V1(tpcds_destroy);
-Datum tpcds_destroy(PG_FUNCTION_ARGS) {
-  bool result = tpcds::tpcds_destroy();
+PG_FUNCTION_INFO_V1(tpcds_cleanup);
+Datum tpcds_cleanup(PG_FUNCTION_ARGS) {
+  bool result = tpcds::tpcds_cleanup();
 
   PG_RETURN_BOOL(result);
 }
@@ -108,14 +117,34 @@ Datum tpcds_queries(PG_FUNCTION_ARGS) {
   return 0;
 }
 
-// PG_FUNCTION_INFO_V1(dsdgen);
+PG_FUNCTION_INFO_V1(tpcds_runner);
 
-// Datum dsdgen(PG_FUNCTION_ARGS) {
-//   double sf = PG_GETARG_FLOAT8(0);
-//   bool overwrite = PG_GETARG_BOOL(1);
+Datum tpcds_runner(PG_FUNCTION_ARGS) {
+  int qid = PG_GETARG_INT32(0);
 
-//   bool result = tpcds::dsdgen(sf, overwrite);
+  ReturnSetInfo* rsinfo = (ReturnSetInfo*)fcinfo->resultinfo;
 
-//   PG_RETURN_BOOL(result);
-// }
+  Datum values[3];
+  bool nulls[3] = {false, false, false};
+
+  tpcds::tpcds_runner_result** result = tpcds::tpcds_runner(qid);
+
+  InitMaterializedSRF(fcinfo, 0);
+
+  if (qid == 0) {
+    for (int i = 0; i < tpcds::tpcds_num_queries(); i++) {
+      values[0] = result[i]->qid;
+      values[1] = Float8GetDatum(result[i]->duration);
+      values[2] = BoolGetDatum(result[i]->checked);
+      tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
+    }
+  } else {
+    values[0] = result[0]->qid;
+    values[1] = Float8GetDatum(result[0]->duration);
+    values[2] = BoolGetDatum(result[0]->checked);
+    tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
+  }
+
+  return 0;
+}
 }

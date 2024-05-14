@@ -28,38 +28,53 @@ extern "C" {
 
 namespace tpcds {
 
-static char *get_extension_external_directory(void) {
+static auto get_extension_external_directory(void) {
   char sharepath[MAXPGPATH];
-  char *result;
 
   get_share_path(my_exec_path, sharepath);
-  result = (char *)palloc(MAXPGPATH);
-  snprintf(result, MAXPGPATH, "%s/extension/tpcds", sharepath);
-
-  return result;
+  auto path = std::format("{}/extension/tpcds", sharepath);
+  return std::move(path);
 }
 
-void DSDGenWrapper::CreateTPCDSSchema(bool overwrite) {
+class Executor {
+ public:
+  Executor(const Executor &other) = delete;
+  Executor &operator=(const Executor &other) = delete;
+
+  Executor() {
+    if (SPI_connect() != SPI_OK_CONNECT)
+      throw std::runtime_error("SPI_connect Failed");
+  }
+
+  ~Executor() { SPI_finish(); }
+
+  void execute(const std::string &query) const {
+    if (auto ret = SPI_exec(query.c_str(), 0); ret < 0)
+      throw std::runtime_error(std::format("SPI_exec Failed, get {}", ret));
+  }
+};
+
+[[maybe_unused]] static double exec_spec(const auto &path,
+                                         const Executor &executor) {
+  if (std::filesystem::exists(path)) {
+    std::ifstream file(path);
+    std::string sql((std::istreambuf_iterator<char>(file)),
+                    std::istreambuf_iterator<char>());
+    const auto start = std::chrono::high_resolution_clock::now();
+    executor.execute(sql);
+    const auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double, std::milli>(end - start).count();
+  }
+  return 0;
+}
+
+void DSDGenWrapper::CreateTPCDSSchema() {
   const std::filesystem::path extension_dir =
       get_extension_external_directory();
 
-  if (SPI_connect() != SPI_OK_CONNECT)
-    throw std::runtime_error(std::format("SPI_connect Failed"));
+  Executor executor;
 
-  // 判断 pre_prepare.sql 是否存在，存在则读取文件内容，然后breaek
-  auto post_prepare_path = extension_dir / "post_prepare.sql";
-  if (false && std::filesystem::exists(post_prepare_path)) {
-    std::ifstream post_prepare_file(post_prepare_path);
-    std::string post_prepare_sql(
-        (std::istreambuf_iterator<char>(post_prepare_file)),
-        std::istreambuf_iterator<char>());
-    SPI_connect();
-    if (SPI_exec(post_prepare_sql.c_str(), 0) != SPI_OK_UTILITY) {
-      throw std::runtime_error(
-          std::format("Failed to execute post_prepare.sql"));
-    }
-    SPI_finish();
-  }
+  exec_spec(extension_dir / "pre_prepare.sql", executor);
 
   auto schema = extension_dir / "schema";
   if (std::filesystem::exists(schema)) {
@@ -68,86 +83,21 @@ void DSDGenWrapper::CreateTPCDSSchema(bool overwrite) {
           std::ifstream file(entry.path());
           std::string sql((std::istreambuf_iterator<char>(file)),
                           std::istreambuf_iterator<char>());
-          if (SPI_exec(sql.c_str(), 0) != SPI_OK_UTILITY) {
-            throw std::runtime_error(std::format(
-                "Failed to execute schema file {}", entry.path().string()));
-          }
+          executor.execute(sql);
         });
   } else
-    throw std::runtime_error(std::format("Schema file does not exist"));
+    throw std::runtime_error("Schema file does not exist");
 
-  // 判断 post_prepare.sql 是否存在，存在则读取文件内容，然后breaek
-
-  if (SPI_finish() != SPI_OK_FINISH)
-    throw std::runtime_error(std::format("SPI_finish Failed"));
+  exec_spec(extension_dir / "post_prepare.sql", executor);
 }
 
-void DSDGenWrapper::DropTPCDSSchema() {
-  if (SPI_connect() != SPI_OK_CONNECT)
-    throw std::runtime_error(std::format("SPI_connect Failed"));
-
-  std::ranges::for_each(std::views::iota(0, 24), [&](auto i) {
-    auto sql = std::format("DROP TABLE IF EXISTS {};", getTableNameByID(i));
-    if (SPI_exec(sql.c_str(), 0) != SPI_OK_UTILITY)
-      throw std::runtime_error(
-          std::format("Failed to drop table {}", getTableNameByID(i)));
-  });
-
-  if (SPI_finish() != SPI_OK_FINISH)
-    throw std::runtime_error(std::format("SPI_finish Failed"));
+void DSDGenWrapper::CleanUpTPCDSSchema() {
+  Executor executor;
+  const std::filesystem::path extension_dir =
+      get_extension_external_directory();
+  exec_spec(extension_dir / "pg_tpcds_cleanup.sql", executor);
 }
-/*
-void DSDGenWrapper::DSDGen(double scale, bool overwrite) {
-  if (scale <= 0) {
-    // schema only
-    return;
-  }
 
-  InitializeDSDgen(scale);
-
-  // populate append info
-
-  int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
-
-  for (int table_id = tmin; table_id < tmax; table_id++) {
-    auto table_def = GetTDefByNumber(table_id);
-  }
-
-  // actually generate tables using modified data generator functions
-  for (int table_id = tmin; table_id < tmax; table_id++) {
-    // child tables are created in parent loaders
-    if (append_info[table_id]->table_def.fl_child) {
-      continue;
-    }
-
-    ds_key_t k_row_count = GetRowCount(table_id), k_first_row = 1;
-
-    // TODO: verify this is correct and required here
-    if (append_info[table_id]->table_def.fl_small) {
-      ResetCountCount();
-    }
-
-    auto builder_func = GetTDefFunctionByNumber(table_id);
-    assert(builder_func);
-
-    for (ds_key_t i = k_first_row; k_row_count; i++, k_row_count--) {
-      if (k_row_count % 1000 == 0 && context.interrupted) {
-        throw std::runtime_error("Query execution interrupted");
-      }
-      // append happens directly in builders since they dump child tables
-      // immediately
-      if (builder_func((void *)&append_info, i)) {
-        throw std::runtime_error("Table generation failed");
-      }
-    }
-  }
-
-  // flush any incomplete chunks
-  for (int table_id = tmin; table_id < tmax; table_id++) {
-    append_info[table_id]->appender.Close();
-  }
-}
-*/
 uint32_t DSDGenWrapper::QueriesCount() {
   return TPCDS_QUERIES_COUNT;
 }
@@ -157,7 +107,69 @@ const char *DSDGenWrapper::GetQuery(int query) {
     throw std::runtime_error(
         std::format("Out of range TPC-DS query number {}", query));
   }
-  return TPCDS_QUERIES[query - 1];
+
+  const std::filesystem::path extension_dir =
+      get_extension_external_directory();
+
+  auto queries = extension_dir / "queries" / std::format("{:02d}.sql", query);
+  if (std::filesystem::exists(queries)) {
+    std::ifstream file(queries);
+    std::string sql((std::istreambuf_iterator<char>(file)),
+                    std::istreambuf_iterator<char>());
+
+    return strdup(sql.c_str());
+  }
+  throw std::runtime_error("Queries file does not exist");
 }
 
+tpcds_runner_result **DSDGenWrapper::RunTPCDS(int qid) {
+  if (qid < 0 || qid > TPCDS_QUERIES_COUNT) {
+    throw std::runtime_error(
+        std::format("Out of range TPC-DS query number {}", qid));
+  }
+
+  const std::filesystem::path extension_dir =
+      get_extension_external_directory();
+
+  Executor executor;
+
+  if (qid == 0) {
+    auto **result = (tpcds_runner_result **)palloc(
+        sizeof(tpcds_runner_result *) * TPCDS_QUERIES_COUNT);
+    for (int i = 0; i < TPCDS_QUERIES_COUNT; i++) {
+      auto qid = i + 1;
+      auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
+      if (std::filesystem::exists(queries)) {
+        result[i] = (tpcds_runner_result *)palloc0(sizeof(tpcds_runner_result));
+        result[i]->qid = qid;
+        result[i]->duration = exec_spec(queries, executor);
+
+        // TODO: check result
+        result[i]->checked = true;
+
+      } else
+        throw std::runtime_error(
+            std::format("Queries file for qid: {} does not exist", i + 1));
+    }
+    return result;
+  } else {
+    auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
+
+    if (std::filesystem::exists(queries)) {
+      auto **result =
+          (tpcds_runner_result **)palloc(sizeof(tpcds_runner_result *));
+
+      result[0] = (tpcds_runner_result *)palloc0(sizeof(tpcds_runner_result));
+      result[0]->qid = qid;
+      result[0]->duration = exec_spec(queries, executor);
+
+      // TODO: check result
+      result[0]->checked = true;
+
+      return result;
+    } else
+      throw std::runtime_error(
+          std::format("Queries file for qid: {} does not exist", qid));
+  }
+}
 }  // namespace tpcds
