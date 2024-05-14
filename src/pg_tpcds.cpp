@@ -44,14 +44,14 @@ static int tpcds_num_queries() {
   return tpcds::DSDGenWrapper::QueriesCount();
 }
 
-static bool dsdgen(double scale_factor, bool overwrite) {
-  try {
-    tpcds::DSDGenWrapper::DSDGen(scale_factor, overwrite);
-  } catch (const std::exception& e) {
-    return false;
-  }
-  return true;
-}
+// static bool dsdgen(double scale_factor, bool overwrite) {
+//   try {
+//     tpcds::DSDGenWrapper::DSDGen(scale_factor, overwrite);
+//   } catch (const std::exception& e) {
+//     return false;
+//   }
+//   return true;
+// }
 
 }  // namespace tpcds
 
@@ -108,14 +108,14 @@ Datum tpcds_queries(PG_FUNCTION_ARGS) {
   return 0;
 }
 
-PG_FUNCTION_INFO_V1(dsdgen);
+// PG_FUNCTION_INFO_V1(dsdgen);
 
-Datum dsdgen(PG_FUNCTION_ARGS) {
-  double sf = PG_GETARG_FLOAT8(0);
-  bool overwrite = PG_GETARG_BOOL(1);
+// Datum dsdgen(PG_FUNCTION_ARGS) {
+//   double sf = PG_GETARG_FLOAT8(0);
+//   bool overwrite = PG_GETARG_BOOL(1);
 
-  bool result = tpcds::dsdgen(sf, overwrite);
+//   bool result = tpcds::dsdgen(sf, overwrite);
 
-  PG_RETURN_BOOL(result);
-}
+//   PG_RETURN_BOOL(result);
+// }
 }

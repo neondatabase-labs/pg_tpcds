@@ -2,10 +2,13 @@
 --  args:
 --   scale factor in GB: 1, 10, 100, 300, 1000, 3000, 10000
 --   overwrite: true or false
-CREATE FUNCTION dsdgen(double, boolean)
-    RETURNS boolean
-    AS 'MODULE_PATHNAME', 'dsdgen'
-    LANGUAGE C IMMUTABLE STRICT;
+--   
+-- CREATE FUNCTION dsdgen(IN double sf,
+--                        IN overwrite boolean,
+--                        IN text table DEFAULT '')
+--     RETURNS boolean
+--     AS 'MODULE_PATHNAME', 'dsdgen'
+--     LANGUAGE C IMMUTABLE STRICT;
 
 -- create tpcds tables
 --  args:

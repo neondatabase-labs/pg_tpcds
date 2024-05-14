@@ -7,3 +7,31 @@ add_postgresql_extension(
   SOURCES pg_tpcds.cpp
   SCRIPTS pg_tpcds--1.0.sql
   DEPENDS_LIB ${TPCDS_OBJECT_FILES})
+
+# pre_prepare.sql
+# post_prepare.sql
+
+set(TPCDS_CURR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tpcds)
+set(TPCDS_INSTALL_DIR ${PostgreSQL_EXTENSION_DIR}/tpcds)
+
+install(
+  DIRECTORY
+    ${TPCDS_CURR_DIR}/schema
+  DESTINATION
+    ${TPCDS_INSTALL_DIR}
+)
+
+install(
+  DIRECTORY
+    ${TPCDS_CURR_DIR}/queries
+  DESTINATION
+    ${TPCDS_INSTALL_DIR}
+)
+
+install(
+  FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/pre_prepare.sql
+    ${CMAKE_CURRENT_SOURCE_DIR}/post_prepare.sql
+  DESTINATION
+    ${TPCDS_INSTALL_DIR}
+)

@@ -6,6 +6,7 @@ extern "C" {
 #include <executor/spi.h>
 #include <lib/stringinfo.h>
 #include <libpq/pqformat.h>
+#include <miscadmin.h>
 #include <utils/builtins.h>
 
 #include <string.h>
@@ -27,14 +28,55 @@ extern "C" {
 
 namespace tpcds {
 
+static char *get_extension_external_directory(void) {
+  char sharepath[MAXPGPATH];
+  char *result;
+
+  get_share_path(my_exec_path, sharepath);
+  result = (char *)palloc(MAXPGPATH);
+  snprintf(result, MAXPGPATH, "%s/extension/tpcds", sharepath);
+
+  return result;
+}
+
 void DSDGenWrapper::CreateTPCDSSchema(bool overwrite) {
+  const std::filesystem::path extension_dir =
+      get_extension_external_directory();
+
   if (SPI_connect() != SPI_OK_CONNECT)
     throw std::runtime_error(std::format("SPI_connect Failed"));
 
-  std::ranges::for_each(TPCDS_TABLES, [&](const auto &table) {
-    if (SPI_exec(table, 0) != SPI_OK_UTILITY)
-      throw std::runtime_error(std::format("Failed to create table {}", table));
-  });
+  // 判断 pre_prepare.sql 是否存在，存在则读取文件内容，然后breaek
+  auto post_prepare_path = extension_dir / "post_prepare.sql";
+  if (false && std::filesystem::exists(post_prepare_path)) {
+    std::ifstream post_prepare_file(post_prepare_path);
+    std::string post_prepare_sql(
+        (std::istreambuf_iterator<char>(post_prepare_file)),
+        std::istreambuf_iterator<char>());
+    SPI_connect();
+    if (SPI_exec(post_prepare_sql.c_str(), 0) != SPI_OK_UTILITY) {
+      throw std::runtime_error(
+          std::format("Failed to execute post_prepare.sql"));
+    }
+    SPI_finish();
+  }
+
+  auto schema = extension_dir / "schema";
+  if (std::filesystem::exists(schema)) {
+    std::ranges::for_each(
+        std::filesystem::directory_iterator(schema), [&](const auto &entry) {
+          std::ifstream file(entry.path());
+          std::string sql((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+          if (SPI_exec(sql.c_str(), 0) != SPI_OK_UTILITY) {
+            throw std::runtime_error(std::format(
+                "Failed to execute schema file {}", entry.path().string()));
+          }
+        });
+  } else
+    throw std::runtime_error(std::format("Schema file does not exist"));
+
+  // 判断 post_prepare.sql 是否存在，存在则读取文件内容，然后breaek
 
   if (SPI_finish() != SPI_OK_FINISH)
     throw std::runtime_error(std::format("SPI_finish Failed"));
@@ -54,7 +96,7 @@ void DSDGenWrapper::DropTPCDSSchema() {
   if (SPI_finish() != SPI_OK_FINISH)
     throw std::runtime_error(std::format("SPI_finish Failed"));
 }
-
+/*
 void DSDGenWrapper::DSDGen(double scale, bool overwrite) {
   if (scale <= 0) {
     // schema only
@@ -105,7 +147,7 @@ void DSDGenWrapper::DSDGen(double scale, bool overwrite) {
     append_info[table_id]->appender.Close();
   }
 }
-
+*/
 uint32_t DSDGenWrapper::QueriesCount() {
   return TPCDS_QUERIES_COUNT;
 }

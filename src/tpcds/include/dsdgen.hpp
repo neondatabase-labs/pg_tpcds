@@ -12,7 +12,7 @@ namespace tpcds {
 
 struct DSDGenWrapper {
   //! Generate the TPC-DS data of the given scale factor
-  static void DSDGen(double scale, bool overwrite);
+  // static void DSDGen(double scale, bool overwrite);
 
   static uint32_t QueriesCount();
   //! Gets the specified TPC-DS Query number as a string
