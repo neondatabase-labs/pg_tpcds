@@ -47,14 +47,13 @@ static int tpcds_num_queries() {
   return tpcds::DSDGenWrapper::QueriesCount();
 }
 
-// static bool dsdgen(double scale_factor, bool overwrite) {
-//   try {
-//     tpcds::DSDGenWrapper::DSDGen(scale_factor, overwrite);
-//   } catch (const std::exception& e) {
-//     return false;
-//   }
-//   return true;
-// }
+static char* dsdgen(int scale_factor, char* table, bool overwrite) {
+  try {
+    return tpcds::DSDGenWrapper::DSDGen(scale_factor, overwrite);
+  } catch (const std::exception& e) {
+    elog(ERROR, "TPC-DS Failed to dsdgen, get error: %s", e.what());
+  }
+}
 
 static tpcds_runner_result* tpcds_runner(int qid) {
   try {
@@ -135,5 +134,17 @@ Datum tpcds_runner(PG_FUNCTION_ARGS) {
   values[2] = BoolGetDatum(result->checked);
 
   PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
+}
+
+PG_FUNCTION_INFO_V1(dsdgen);
+
+Datum dsdgen(PG_FUNCTION_ARGS) {
+  int sf = PG_GETARG_INT32(0);
+  char* table = PG_GETARG_CSTRING(1);
+  bool overwrite = PG_GETARG_BOOL(2);
+
+  char* csv_location = tpcds::dsdgen(sf, table, overwrite);
+
+  PG_RETURN_TEXT_P(cstring_to_text(csv_location));
 }
 }

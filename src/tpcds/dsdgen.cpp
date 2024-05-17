@@ -149,4 +149,9 @@ tpcds_runner_result *DSDGenWrapper::RunTPCDS(int qid) {
     throw std::runtime_error(
         std::format("Queries file for qid: {} does not exist", qid));
 }
+
+char *DSDGenWrapper::DSDGen(int scale, char *table, bool overwrite) {
+  return nullptr;
+}
+
 }  // namespace tpcds
