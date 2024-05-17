@@ -122,7 +122,7 @@ const char *DSDGenWrapper::GetQuery(int query) {
   throw std::runtime_error("Queries file does not exist");
 }
 
-tpcds_runner_result **DSDGenWrapper::RunTPCDS(int qid) {
+tpcds_runner_result *DSDGenWrapper::RunTPCDS(int qid) {
   if (qid < 0 || qid > TPCDS_QUERIES_COUNT) {
     throw std::runtime_error(
         std::format("Out of range TPC-DS query number {}", qid));
@@ -133,43 +133,20 @@ tpcds_runner_result **DSDGenWrapper::RunTPCDS(int qid) {
 
   Executor executor;
 
-  if (qid == 0) {
-    auto **result = (tpcds_runner_result **)palloc(
-        sizeof(tpcds_runner_result *) * TPCDS_QUERIES_COUNT);
-    for (int i = 0; i < TPCDS_QUERIES_COUNT; i++) {
-      auto qid = i + 1;
-      auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
-      if (std::filesystem::exists(queries)) {
-        result[i] = (tpcds_runner_result *)palloc0(sizeof(tpcds_runner_result));
-        result[i]->qid = qid;
-        result[i]->duration = exec_spec(queries, executor);
+  auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
 
-        // TODO: check result
-        result[i]->checked = true;
+  if (std::filesystem::exists(queries)) {
+    auto *result = (tpcds_runner_result *)palloc(sizeof(tpcds_runner_result));
 
-      } else
-        throw std::runtime_error(
-            std::format("Queries file for qid: {} does not exist", i + 1));
-    }
+    result->qid = qid;
+    result->duration = exec_spec(queries, executor);
+
+    // TODO: check result
+    result->checked = true;
+
     return result;
-  } else {
-    auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
-
-    if (std::filesystem::exists(queries)) {
-      auto **result =
-          (tpcds_runner_result **)palloc(sizeof(tpcds_runner_result *));
-
-      result[0] = (tpcds_runner_result *)palloc0(sizeof(tpcds_runner_result));
-      result[0]->qid = qid;
-      result[0]->duration = exec_spec(queries, executor);
-
-      // TODO: check result
-      result[0]->checked = true;
-
-      return result;
-    } else
-      throw std::runtime_error(
-          std::format("Queries file for qid: {} does not exist", qid));
-  }
+  } else
+    throw std::runtime_error(
+        std::format("Queries file for qid: {} does not exist", qid));
 }
 }  // namespace tpcds

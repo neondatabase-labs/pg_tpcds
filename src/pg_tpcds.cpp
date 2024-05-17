@@ -56,7 +56,7 @@ static int tpcds_num_queries() {
 //   return true;
 // }
 
-static tpcds_runner_result** tpcds_runner(int qid) {
+static tpcds_runner_result* tpcds_runner(int qid) {
   try {
     return tpcds::DSDGenWrapper::RunTPCDS(qid);
   } catch (const std::exception& e) {
@@ -121,30 +121,19 @@ PG_FUNCTION_INFO_V1(tpcds_runner);
 
 Datum tpcds_runner(PG_FUNCTION_ARGS) {
   int qid = PG_GETARG_INT32(0);
-
-  ReturnSetInfo* rsinfo = (ReturnSetInfo*)fcinfo->resultinfo;
-
+  TupleDesc tupdesc;
   Datum values[3];
   bool nulls[3] = {false, false, false};
 
-  tpcds::tpcds_runner_result** result = tpcds::tpcds_runner(qid);
+  if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+    elog(ERROR, "return type must be a row type");
 
-  InitMaterializedSRF(fcinfo, 0);
+  tpcds::tpcds_runner_result* result = tpcds::tpcds_runner(qid);
 
-  if (qid == 0) {
-    for (int i = 0; i < tpcds::tpcds_num_queries(); i++) {
-      values[0] = result[i]->qid;
-      values[1] = Float8GetDatum(result[i]->duration);
-      values[2] = BoolGetDatum(result[i]->checked);
-      tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
-    }
-  } else {
-    values[0] = result[0]->qid;
-    values[1] = Float8GetDatum(result[0]->duration);
-    values[2] = BoolGetDatum(result[0]->checked);
-    tuplestore_putvalues(rsinfo->setResult, rsinfo->setDesc, values, nulls);
-  }
+  values[0] = result->qid;
+  values[1] = Float8GetDatum(result->duration);
+  values[2] = BoolGetDatum(result->checked);
 
-  return 0;
+  PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
 }
 }

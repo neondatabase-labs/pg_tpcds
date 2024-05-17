@@ -42,6 +42,10 @@ explain (analyze, format json) :query;
 select tpcds_destroy();
 ```
 
+### TEST
+
+NEED ?
+
 ### LIMIATIONS
 
 - The scripts and tools in this repository are not perfect and may contain errors.
@@ -137,6 +141,9 @@ select tpcds_destroy();
         * 生产文件之后， copy 到表
         * 优化
             * 生成速度慢
+            * 多线程，tpcds 多线程有没有问题
+            * 或者把表切分为不同的线程，然后单独生成
+            * pg 提供的接口调用 copy 多线程是否存在问题
 
     * 正确性验证
         * 内置 sf 0.01 0.1 1 10 的 anwser ，运行之后验证结果的正确性

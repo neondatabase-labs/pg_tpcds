@@ -29,7 +29,7 @@ struct DSDGenWrapper {
 
   static void CleanUpTPCDSSchema();
 
-  static tpcds_runner_result** RunTPCDS(int qid);
+  static tpcds_runner_result* RunTPCDS(int qid);
 };
 
 }  // namespace tpcds
