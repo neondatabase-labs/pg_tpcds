@@ -13,13 +13,13 @@ extern "C" {
 #include <string.h>
 }
 
-#include "tpcds/include/dsdgen.hpp"
+#include "tpcds/include/tpcds_wrapper.hpp"
 
 namespace tpcds {
 
 static bool tpcds_prepare() {
   try {
-    tpcds::DSDGenWrapper::CreateTPCDSSchema();
+    tpcds::TPCDSWrapper::CreateTPCDSSchema();
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to prepare schema, get error: %s", e.what());
   }
@@ -28,7 +28,7 @@ static bool tpcds_prepare() {
 
 static bool tpcds_cleanup() {
   try {
-    tpcds::DSDGenWrapper::CleanUpTPCDSSchema();
+    tpcds::TPCDSWrapper::CleanUpTPCDSSchema();
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to cleanup, get error: %s", e.what());
   }
@@ -37,19 +37,19 @@ static bool tpcds_cleanup() {
 
 static const char* tpcds_queries(int qid) {
   try {
-    return tpcds::DSDGenWrapper::GetQuery(qid);
+    return tpcds::TPCDSWrapper::GetQuery(qid);
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to get query, get error: %s", e.what());
   }
 }
 
 static int tpcds_num_queries() {
-  return tpcds::DSDGenWrapper::QueriesCount();
+  return tpcds::TPCDSWrapper::QueriesCount();
 }
 
 static char* dsdgen(int scale_factor, char* table, bool overwrite) {
   try {
-    return tpcds::DSDGenWrapper::DSDGen(scale_factor, overwrite);
+    return tpcds::TPCDSWrapper::DSDGen(scale_factor, table, overwrite);
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to dsdgen, get error: %s", e.what());
   }
@@ -57,7 +57,7 @@ static char* dsdgen(int scale_factor, char* table, bool overwrite) {
 
 static tpcds_runner_result* tpcds_runner(int qid) {
   try {
-    return tpcds::DSDGenWrapper::RunTPCDS(qid);
+    return tpcds::TPCDSWrapper::RunTPCDS(qid);
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to run query, get error: %s", e.what());
   }
