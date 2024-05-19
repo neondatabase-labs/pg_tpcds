@@ -8,6 +8,8 @@ extern "C" {
 #include <libpq/pqformat.h>
 #include <miscadmin.h>
 #include <utils/builtins.h>
+
+#include "dsdgen_wrapper.h"
 }
 #include <algorithm>
 #include <cassert>
@@ -146,7 +148,12 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
 }
 
 char *TPCDSWrapper::DSDGen(int scale, char *table, bool overwrite) {
-  return nullptr;
+  char sf[5];
+  snprintf(sf, 10, "%d", scale);
+  char dir[20];
+  snprintf(dir, 20, "/tmp/sf_%d", scale);
+  std::filesystem::create_directory(dir);
+  return dsdgen_internal(sf, table, dir, overwrite);
 }
 
 }  // namespace tpcds

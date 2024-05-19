@@ -121,6 +121,16 @@ target_link_libraries(dsdgen m tpcds_common)
 
 add_dependencies(dsdgen COLUMS_HEADERS DISCOMP)
 
+add_library(dsdgen_wrapper STATIC ${CMAKE_CURRENT_SOURCE_DIR}/dsdgen_wrapper.c)
+
+target_link_libraries(dsdgen_wrapper PUBLIC dsdgen tpcds_common)
+
+target_include_directories(dsdgen_wrapper PUBLIC ${TPCDS_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+  target_compile_options(dsdgen_wrapper PUBLIC
+  "-fPIC")
+
 # dsqgen dependence on COLUMS_HEADERS, DISCOMP
 find_package(FLEX REQUIRED)
 find_package(BISON 3.5.0 REQUIRED)
@@ -162,10 +172,10 @@ target_link_libraries(dsqgen m tpcds_common)
 
 add_dependencies(dsqgen DISCOMP)
 
-add_library(tpcds OBJECT
+add_library(tpcds SHARED
     tpcds_wrapper.cpp)
 
-target_link_libraries(tpcds PUBLIC dsdgen dsqgen tpcds_common)
+target_link_libraries(tpcds PUBLIC  dsdgen_wrapper)
 
 target_include_directories(tpcds PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

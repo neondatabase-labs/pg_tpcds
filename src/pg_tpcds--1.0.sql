@@ -3,9 +3,9 @@
 --   scale factor in GB: 1, 10, 100, 300, 1000, 3000, 10000
 --   overwrite: true or false
 --   
-CREATE FUNCTION dsdgen(IN int sf,
-                    IN text table,
-                    IN overwrite boolean DEFAULT false,
+CREATE FUNCTION dsdgen(IN sf int,
+                    IN gentable cstring,
+                    IN overwrite boolean DEFAULT false
     )
     RETURNS text
     AS 'MODULE_PATHNAME', 'dsdgen'
