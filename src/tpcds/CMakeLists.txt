@@ -1,181 +1,135 @@
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format -Wno-implicit-int -Wno-deprecated-declarations")
-list(APPEND TPCDS_COMPILE_OPTIONS "-D_FILE_OFFSET_BITS=64" "-D_LARGEFILE_SOURCE" "-DLINUX")
-set(TPCDS_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include/tpcds)
+# Build tpcds_dbgen library
+set(TPCDS_KIT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tpcds-kit/tools)
+add_library(tpcds_dbgen
+  STATIC
+  ${TPCDS_KIT_DIR}/address.c
+  ${TPCDS_KIT_DIR}/build_support.c
+  ${TPCDS_KIT_DIR}/date.c
+  ${TPCDS_KIT_DIR}/decimal.c
+  ${TPCDS_KIT_DIR}/dist.c
+  ${TPCDS_KIT_DIR}/modified_driver.c
+  ${TPCDS_KIT_DIR}/error_msg.c
+  ${TPCDS_KIT_DIR}/genrand.c
+  ${TPCDS_KIT_DIR}/join.c
+  ${TPCDS_KIT_DIR}/list.c
+  ${TPCDS_KIT_DIR}/load.c
+  ${TPCDS_KIT_DIR}/misc.c
+  ${TPCDS_KIT_DIR}/nulls.c
+  ${TPCDS_KIT_DIR}/parallel.c
+  ${TPCDS_KIT_DIR}/permute.c
+  ${TPCDS_KIT_DIR}/pricing.c
+  ${TPCDS_KIT_DIR}/print.c
+  ${TPCDS_KIT_DIR}/r_params.c
+  ${TPCDS_KIT_DIR}/StringBuffer.c
+  ${TPCDS_KIT_DIR}/tdef_functions.c
+  ${TPCDS_KIT_DIR}/tdefs.c
+  ${TPCDS_KIT_DIR}/text.c
+  ${TPCDS_KIT_DIR}/scd.c
+  ${TPCDS_KIT_DIR}/scaling.c
+  ${TPCDS_KIT_DIR}/release.c
+  ${TPCDS_KIT_DIR}/sparse.c
+  ${TPCDS_KIT_DIR}/validate.c
 
+  ${TPCDS_KIT_DIR}/dbgen_version.c
 
-# mkheader
-add_executable(mkheader
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/mkheader/mkheader.c)
+  ${TPCDS_KIT_DIR}/s_brand.c
+  ${TPCDS_KIT_DIR}/s_call_center.c
+  ${TPCDS_KIT_DIR}/s_catalog.c
+  ${TPCDS_KIT_DIR}/s_catalog_order.c
+  ${TPCDS_KIT_DIR}/s_catalog_order_lineitem.c
+  ${TPCDS_KIT_DIR}/s_catalog_page.c
+  ${TPCDS_KIT_DIR}/s_catalog_promotional_item.c
+  ${TPCDS_KIT_DIR}/s_catalog_returns.c
+  ${TPCDS_KIT_DIR}/s_category.c
+  ${TPCDS_KIT_DIR}/s_class.c
+  ${TPCDS_KIT_DIR}/s_company.c
+  ${TPCDS_KIT_DIR}/s_customer_address.c
+  ${TPCDS_KIT_DIR}/s_customer.c
+  ${TPCDS_KIT_DIR}/s_division.c
+  ${TPCDS_KIT_DIR}/s_inventory.c
+  ${TPCDS_KIT_DIR}/s_item.c
+  ${TPCDS_KIT_DIR}/s_manager.c
+  ${TPCDS_KIT_DIR}/s_manufacturer.c
+  ${TPCDS_KIT_DIR}/s_market.c
+  ${TPCDS_KIT_DIR}/s_pline.c
+  ${TPCDS_KIT_DIR}/s_product.c
+  ${TPCDS_KIT_DIR}/s_promotion.c
+  ${TPCDS_KIT_DIR}/s_purchase.c
+  ${TPCDS_KIT_DIR}/s_reason.c
+  ${TPCDS_KIT_DIR}/s_store.c
+  ${TPCDS_KIT_DIR}/s_store_promotional_item.c
+  ${TPCDS_KIT_DIR}/s_store_returns.c
+  ${TPCDS_KIT_DIR}/s_subcategory.c
+  ${TPCDS_KIT_DIR}/s_subclass.c
+  ${TPCDS_KIT_DIR}/s_warehouse.c
+  ${TPCDS_KIT_DIR}/s_web_order.c
+  ${TPCDS_KIT_DIR}/s_web_order_lineitem.c
+  ${TPCDS_KIT_DIR}/s_web_page.c
+  ${TPCDS_KIT_DIR}/s_web_promotinal_item.c
+  ${TPCDS_KIT_DIR}/s_web_returns.c
+  ${TPCDS_KIT_DIR}/s_web_site.c
+  ${TPCDS_KIT_DIR}/s_zip_to_gmt.c
 
-target_compile_definitions(mkheader
-  PRIVATE
-    ${TPCDS_COMPILE_OPTIONS}
-)
+  ${TPCDS_KIT_DIR}/w_call_center.c
+  ${TPCDS_KIT_DIR}/w_catalog_page.c
+  ${TPCDS_KIT_DIR}/w_catalog_returns.c
+  ${TPCDS_KIT_DIR}/w_catalog_sales.c
+  ${TPCDS_KIT_DIR}/w_customer_address.c
+  ${TPCDS_KIT_DIR}/w_customer.c
+  ${TPCDS_KIT_DIR}/w_customer_demographics.c
+  ${TPCDS_KIT_DIR}/w_datetbl.c
+  ${TPCDS_KIT_DIR}/w_household_demographics.c
+  ${TPCDS_KIT_DIR}/w_income_band.c
+  ${TPCDS_KIT_DIR}/w_inventory.c
+  ${TPCDS_KIT_DIR}/w_item.c
+  ${TPCDS_KIT_DIR}/w_promotion.c
+  ${TPCDS_KIT_DIR}/w_reason.c
+  ${TPCDS_KIT_DIR}/w_ship_mode.c
+  ${TPCDS_KIT_DIR}/w_store.c
+  ${TPCDS_KIT_DIR}/w_store_returns.c
+  ${TPCDS_KIT_DIR}/w_store_sales.c
+  ${TPCDS_KIT_DIR}/w_timetbl.c
+  ${TPCDS_KIT_DIR}/w_warehouse.c
+  ${TPCDS_KIT_DIR}/w_web_page.c
+  ${TPCDS_KIT_DIR}/w_web_returns.c
+  ${TPCDS_KIT_DIR}/w_web_sales.c
+  ${TPCDS_KIT_DIR}/w_web_site.c)
 
-target_include_directories(mkheader PRIVATE ${TPCDS_INCLUDE_DIRS})
-
-add_custom_command(
-  OUTPUT
-    ${TPCDS_INCLUDE_DIRS}/tables.h
-    ${TPCDS_INCLUDE_DIRS}/streams.h
-    ${TPCDS_INCLUDE_DIRS}/columns.h
-  COMMAND mkheader ${CMAKE_CURRENT_SOURCE_DIR}/src/mkheader/column_list.txt
-  DEPENDS mkheader
-  WORKING_DIRECTORY ${TPCDS_INCLUDE_DIRS}
-)
-
-add_custom_target(
-  COLUMS_HEADERS
-  DEPENDS
-    ${TPCDS_INCLUDE_DIRS}/tables.h
-    ${TPCDS_INCLUDE_DIRS}/streams.h
-    ${TPCDS_INCLUDE_DIRS}/columns.h
-)
-
-
-# common library dependence on columns headers
-file(
-  GLOB_RECURSE
-  TPCDS_COMMON
-  CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/common/*.c
-)
-
-add_library(tpcds_common STATIC ${TPCDS_COMMON})
-
-target_include_directories(tpcds_common PUBLIC ${TPCDS_INCLUDE_DIRS})
-
-target_compile_definitions(tpcds_common
+target_include_directories(tpcds_dbgen
   PUBLIC
-  ${TPCDS_COMPILE_OPTIONS}
-)
+  ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(tpcds_common m)
+target_compile_definitions(
+  tpcds_dbgen
+  PUBLIC
+  -DLINUX)
 
-add_dependencies(tpcds_common COLUMS_HEADERS)
-
-
-# distcomp
-#  gen tpcds.idx.h and tpcds.idx
-#  dependence on COLUMS_HEADERS
-file(
-  GLOB_RECURSE
-  DISTCOMP_SRC
-  CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/distcomp/*.c
-)
-
-add_executable(distcomp ${DISTCOMP_SRC})
-
-target_compile_definitions(distcomp
+target_compile_options(
+  tpcds_dbgen
   PRIVATE
-    ${TPCDS_COMPILE_OPTIONS}
+
+  -Wno-format
+  -Wno-implicit-int
+  -Wno-incompatible-pointer-types
+  -Wno-unused-result
 )
 
-target_link_libraries(distcomp m)
-
-add_custom_command(
-  OUTPUT
-    ${TPCDS_INCLUDE_DIRS}/tpcds.idx.h
-    ${TPCDS_INCLUDE_DIRS}/tpcds.idx
-  COMMAND distcomp -i tpcds.dst -o tpcds.idx
-  DEPENDS distcomp
-  WORKING_DIRECTORY ${TPCDS_INCLUDE_DIRS}
-)
-
-add_custom_target(DISCOMP
-  DEPENDS
-    ${TPCDS_INCLUDE_DIRS}/tpcds.idx.h
-    ${TPCDS_INCLUDE_DIRS}/tpcds.idx
-)
-
-target_compile_definitions(distcomp
-  PRIVATE
-    ${TPCDS_COMPILE_OPTIONS}
-)
-
-target_include_directories(distcomp PRIVATE ${TPCDS_INCLUDE_DIRS})
-
-target_link_libraries(distcomp m tpcds_common)
-
-add_dependencies(distcomp COLUMS_HEADERS)
-
-# dsdgen library dependence on COLUMS_HEADERS and DISCOMP
-file(
-  GLOB_RECURSE
-  TPCDS_SRC
-  CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsdgen/*.c
-)
-
-add_library(dsdgen STATIC ${TPCDS_SRC})
-
-target_include_directories(dsdgen PRIVATE ${TPCDS_INCLUDE_DIRS})
-
-target_compile_definitions(dsdgen
-  PRIVATE
-    ${TPCDS_COMPILE_OPTIONS}
-)
-
-target_link_libraries(dsdgen m tpcds_common)
-
-add_dependencies(dsdgen COLUMS_HEADERS DISCOMP)
-
-add_library(dsdgen_wrapper STATIC ${CMAKE_CURRENT_SOURCE_DIR}/dsdgen_wrapper.c)
-
-target_link_libraries(dsdgen_wrapper PUBLIC dsdgen tpcds_common)
-
-target_include_directories(dsdgen_wrapper PUBLIC ${TPCDS_INCLUDE_DIRS}
-  ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-  target_compile_options(dsdgen_wrapper PUBLIC
+target_compile_options(tpcds_dbgen PUBLIC
   "-fPIC")
 
-# dsqgen dependence on COLUMS_HEADERS, DISCOMP
-find_package(FLEX REQUIRED)
-find_package(BISON 3.5.0 REQUIRED)
-
-list(APPEND BISON_OPTIONS "-d -v")
-
-bison_target(parser
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsqgen/qgen.y
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsqgen/y.tab.c
-    COMPILE_FLAGS ${BISON_OPTIONS})
-
-flex_target(scanner
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsqgen/tokenizer.l
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsqgen/tokenizer.c)
-
-ADD_FLEX_BISON_DEPENDENCY(scanner parser)
-
-file(
-  GLOB_RECURSE
-  TPCDS_LOAD_SRC
-  CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/dsqgen/*.c
-)
-
-add_library(dsqgen STATIC
-  ${TPCDS_LOAD_SRC}
-  ${BISON_parser_OUTPUTS}
-  ${FLEX_scanner_OUTPUTS}
-)
-
-target_include_directories(dsqgen PRIVATE ${TPCDS_INCLUDE_DIRS})
-
-target_compile_definitions(dsqgen
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+target_compile_options(
+  tpcds_dbgen
   PRIVATE
-    ${TPCDS_COMPILE_OPTIONS}
+
+  -Wno-parentheses-equality
 )
+endif()
 
-target_link_libraries(dsqgen m tpcds_common)
+add_library(tpcds STATIC
+tpcds_dsdgen.cpp tpcds_wrapper.cpp)
 
-add_dependencies(dsqgen DISCOMP)
-
-add_library(tpcds SHARED
-    tpcds_wrapper.cpp)
-
-target_link_libraries(tpcds PUBLIC  dsdgen_wrapper)
+target_link_libraries(tpcds tpcds_dbgen)
 
 target_include_directories(tpcds PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -185,6 +139,6 @@ target_include_directories(tpcds PUBLIC
 target_compile_options(tpcds PUBLIC
   "-fPIC")
 
-set(TPCDS_OBJECT_FILES
-    ${TPCDS_OBJECT_FILES} $<TARGET_OBJECTS:tpcds>
-    PARENT_SCOPE)
+# set(TPCDS_OBJECT_FILES
+#     ${TPCDS_OBJECT_FILES} $<TARGET_OBJECTS:tpcds>
+#     PARENT_SCOPE)

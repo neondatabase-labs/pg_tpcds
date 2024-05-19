@@ -1,13 +1,14 @@
 
 add_subdirectory(tpcds)
 
+message("TPCDS_OBJECT_FILES: ${TPCDS_OBJECT_FILES}")
 add_postgresql_extension(
   pg_tpcds
   VERSION 1.0
   SOURCES pg_tpcds.cpp
-  SCRIPTS pg_tpcds--1.0.sql
-  DEPENDS_LIB ${TPCDS_OBJECT_FILES})
+  SCRIPTS pg_tpcds--1.0.sql)
 
+target_link_libraries(pg_tpcds tpcds)
 # pre_prepare.sql
 # post_prepare.sql
 
@@ -39,6 +40,13 @@ install(
 install(
   FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/pg_tpcds_cleanup.sql
+  DESTINATION
+    ${TPCDS_INSTALL_DIR}
+)
+
+install(
+  FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/tpcds.idx
   DESTINATION
     ${TPCDS_INSTALL_DIR}
 )
