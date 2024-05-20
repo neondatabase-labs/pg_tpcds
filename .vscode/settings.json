@@ -60,6 +60,7 @@
     "fstream": "cpp",
     "*.sql": "sql",
     "ranges": "cpp",
-    "tpcds.idx.h": "c"
+    "tpcds.idx.h": "c",
+    "iostream": "cpp"
   }
 }

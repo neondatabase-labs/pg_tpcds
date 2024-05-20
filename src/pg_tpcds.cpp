@@ -47,7 +47,7 @@ static int tpcds_num_queries() {
   return tpcds::TPCDSWrapper::QueriesCount();
 }
 
-static bool dsdgen(int scale_factor, char* table, bool overwrite) {
+static bool dsdgen_internal(int scale_factor, char* table, bool overwrite) {
   try {
     return tpcds::TPCDSWrapper::DSDGen(scale_factor, table, overwrite);
   } catch (const std::exception& e) {
@@ -136,14 +136,14 @@ Datum tpcds_runner(PG_FUNCTION_ARGS) {
   PG_RETURN_DATUM(HeapTupleGetDatum(heap_form_tuple(tupdesc, values, nulls)));
 }
 
-PG_FUNCTION_INFO_V1(dsdgen);
+PG_FUNCTION_INFO_V1(dsdgen_internal);
 
-Datum dsdgen(PG_FUNCTION_ARGS) {
+Datum dsdgen_internal(PG_FUNCTION_ARGS) {
   int sf = PG_GETARG_INT32(0);
-  char* table = PG_GETARG_CSTRING(1);
+  char* table = text_to_cstring(PG_GETARG_TEXT_PP(1));
   bool overwrite = PG_GETARG_BOOL(2);
 
-  bool done = tpcds::dsdgen(sf, table, overwrite);
+  bool done = tpcds::dsdgen_internal(sf, table, overwrite);
 
   PG_RETURN_BOOL(done);
 }

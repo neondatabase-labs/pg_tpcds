@@ -3,13 +3,32 @@
 --   scale factor in GB: 1, 10, 100, 300, 1000, 3000, 10000
 --   overwrite: true or false
 --   
-CREATE FUNCTION dsdgen(IN sf int,
-                    IN gentable cstring,
+CREATE FUNCTION dsdgen_internal(IN sf int,
+                    IN gentable TEXT,
                     IN overwrite boolean DEFAULT false
     )
     RETURNS boolean
-    AS 'MODULE_PATHNAME', 'dsdgen'
+    AS 'MODULE_PATHNAME', 'dsdgen_internal'
     LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION generate_data(sf INT)
+RETURNS TABLE(tab TEXT, success BOOLEAN) AS $$
+DECLARE
+    rec RECORD;
+BEGIN
+    FOR rec IN SELECT table_name, status, child FROM tpcds.tpcds_tables LOOP
+        IF rec.status <> 1 THEN
+            success := dsdgen_internal(sf, rec.table_name);
+            tab := rec.table_name;
+            RETURN NEXT;
+            IF rec.status = 2 THEN
+                tab := rec.child;
+                RETURN NEXT;
+            END IF;
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE FUNCTION tpcds_prepare() RETURNS BOOLEAN AS 'MODULE_PATHNAME',
 'tpcds_prepare' LANGUAGE C IMMUTABLE STRICT;

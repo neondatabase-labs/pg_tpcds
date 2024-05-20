@@ -37,3 +37,4 @@ tags
 # Flat files
 *.dat
 build/
+.vscode

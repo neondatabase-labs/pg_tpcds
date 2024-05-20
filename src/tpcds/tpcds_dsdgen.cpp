@@ -24,6 +24,7 @@ extern "C" {
 #include <miscadmin.h>
 #include <utils/builtins.h>
 
+// TODO split pg functions into other file
 #ifdef vsnprintf
 #undef vsnprintf
 #endif
@@ -210,7 +211,7 @@ class TableLoader {
         throw std::runtime_error("TPCDSTableGenerator internal error");
       }
       sql.clear();
-      curr_batch_ = 0;
+      curr_batch_ = 1;
     }
     sql += "(";
 
@@ -234,7 +235,7 @@ class TableLoader {
       else
         sql += std::format("{}{}", value.value(), pos);
     } else
-      sql += std::format("null,");
+      sql += std::format("null{}", pos);
 
     return *this;
   }
@@ -303,7 +304,17 @@ std::optional<tpcds_key_t> resolve_key(int column_id, ds_key_t key) {
 }
 
 std::optional<std::string> resolve_string(int column_id, std::string string) {
-  return nullCheck(column_id) != 0 || string.empty() ? std::nullopt : std::optional{std::move(string)};
+  if (nullCheck(column_id) != 0 || string.empty())
+    return std::nullopt;
+
+  std::string str;
+  std::ranges::for_each(string, [&](char& c) {
+    if (c == '\'')
+      str += "''";
+    else
+      str += c;
+  });
+  return str;
 }
 
 std::optional<int32_t> resolve_integer(int column_id, int value) {
@@ -532,6 +543,7 @@ bool TPCDSTableGenerator::generate_customer_address() const {
         .addItem(resolve_string(CA_ADDRESS_COUNTY, customer_address.ca_address.county))
         .addItem(resolve_string(CA_ADDRESS_STATE, customer_address.ca_address.state))
         .addItem(resolve_string(CA_ADDRESS_ZIP, zip_to_string(customer_address.ca_address.zip)))
+        .addItem(resolve_string(CA_ADDRESS_COUNTRY, customer_address.ca_address.country))
         .addItem(resolve_gmt_offset(CA_ADDRESS_GMT_OFFSET, customer_address.ca_address.gmt_offset))
         .addItem(resolve_string(CA_LOCATION_TYPE, customer_address.ca_location_type))
         .end();
@@ -561,6 +573,8 @@ bool TPCDSTableGenerator::generate_customer() const {
         .addItem(resolve_string(C_PREFERRED_CUST_FLAG, boolean_to_string(customer.c_preferred_cust_flag != 0)))
         .addItem(resolve_integer(C_BIRTH_DAY, customer.c_birth_day))
         .addItem(resolve_integer(C_BIRTH_MONTH, customer.c_birth_month))
+        .addItem(resolve_integer(C_BIRTH_YEAR, customer.c_birth_year))
+        .addItem(resolve_string(C_BIRTH_COUNTRY, customer.c_birth_country))
         .addItem(resolve_string(C_LOGIN, customer.c_login))
         .addItem(resolve_string(C_EMAIL_ADDRESS, customer.c_email_address))
         .addItem(resolve_integer(C_LAST_REVIEW_DATE, customer.c_last_review_date))
@@ -606,7 +620,7 @@ bool TPCDSTableGenerator::generate_date_dim() const {
 
     loader.start()
         .addItem(date.d_date_sk)
-        .addItem(date.d_date_id)
+        .addItem(resolve_string(D_DATE_ID, date.d_date_id))
         .addItem(resolve_date_id(D_DATE_SK, date.d_date_sk))
         .addItem(resolve_integer(D_MONTH_SEQ, date.d_month_seq))
         .addItem(resolve_integer(D_WEEK_SEQ, date.d_week_seq))
@@ -749,8 +763,8 @@ bool TPCDSTableGenerator::generate_promotion() const {
     loader.start()
         .addItem(resolve_key(P_PROMO_SK, promotion.p_promo_sk))
         .addItem(resolve_string(P_PROMO_ID, promotion.p_promo_id))
-        .addItem(resolve_date_id(P_START_DATE_ID, promotion.p_start_date_id))
-        .addItem(resolve_date_id(P_END_DATE_ID, promotion.p_end_date_id))
+        .addItem(resolve_key(P_START_DATE_ID, promotion.p_start_date_id))
+        .addItem(resolve_key(P_END_DATE_ID, promotion.p_end_date_id))
         .addItem(resolve_key(P_ITEM_SK, promotion.p_item_sk))
         .addItem(resolve_decimal(P_COST, promotion.p_cost))
         .addItem(resolve_integer(P_RESPONSE_TARGET, promotion.p_response_target))
@@ -822,7 +836,7 @@ bool TPCDSTableGenerator::generate_store() const {
 
     loader.start()
         .addItem(store.store_sk)
-        .addItem(store.store_id)
+        .addItem(resolve_string(W_STORE_ID, store.store_id))
         .addItem(resolve_date_id(W_STORE_REC_START_DATE_ID, store.rec_start_date_id))
         .addItem(resolve_date_id(W_STORE_REC_END_DATE_ID, store.rec_end_date_id))
         .addItem(resolve_key(W_STORE_CLOSED_DATE_ID, store.closed_date_id))
@@ -847,6 +861,7 @@ bool TPCDSTableGenerator::generate_store() const {
         .addItem(resolve_string(W_STORE_ADDRESS_COUNTY, store.address.county))
         .addItem(resolve_string(W_STORE_ADDRESS_STATE, store.address.state))
         .addItem(resolve_string(W_STORE_ADDRESS_ZIP, zip_to_string(store.address.zip)))
+        .addItem(resolve_string(W_STORE_ADDRESS_COUNTRY, store.address.country))
         .addItem(resolve_gmt_offset(W_STORE_ADDRESS_GMT_OFFSET, store.address.gmt_offset))
         .addItem(resolve_decimal(W_STORE_TAX_PERCENTAGE, store.dTaxPercentage))
         .end();
@@ -983,6 +998,7 @@ bool TPCDSTableGenerator::generate_warehouse() const {
         .addItem(resolve_string(W_ADDRESS_COUNTY, warehouse.w_address.county))
         .addItem(resolve_string(W_ADDRESS_STATE, warehouse.w_address.state))
         .addItem(resolve_string(W_ADDRESS_ZIP, zip_to_string(warehouse.w_address.zip)))
+        .addItem(resolve_string(W_ADDRESS_COUNTRY, warehouse.w_address.country))
         .addItem(resolve_gmt_offset(W_ADDRESS_GMT_OFFSET, warehouse.w_address.gmt_offset))
         .end();
   }
@@ -1151,6 +1167,7 @@ bool TPCDSTableGenerator::generate_web_site() const {
         .addItem(resolve_string(WEB_ADDRESS_COUNTY, web_site.web_address.county))
         .addItem(resolve_string(WEB_ADDRESS_STATE, web_site.web_address.state))
         .addItem(resolve_string(WEB_ADDRESS_ZIP, zip_to_string(web_site.web_address.zip)))
+        .addItem(resolve_string(WEB_ADDRESS_COUNTRY, web_site.web_address.country))
         .addItem(resolve_gmt_offset(WEB_ADDRESS_GMT_OFFSET, web_site.web_address.gmt_offset))
         .addItem(resolve_decimal(WEB_TAX_PERCENTAGE, web_site.web_tax_percentage))
         .end();
