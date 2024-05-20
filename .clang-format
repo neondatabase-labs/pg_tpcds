@@ -5,6 +5,7 @@ AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline
 IncludeBlocks: Regroup
+ColumnLimit: 120
 # A few special PostgreSQL include files are in the first group but
 # need to be in a specific order to work correctly.
 IncludeCategories:

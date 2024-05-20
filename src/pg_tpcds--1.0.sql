@@ -7,7 +7,7 @@ CREATE FUNCTION dsdgen(IN sf int,
                     IN gentable cstring,
                     IN overwrite boolean DEFAULT false
     )
-    RETURNS text
+    RETURNS boolean
     AS 'MODULE_PATHNAME', 'dsdgen'
     LANGUAGE C IMMUTABLE STRICT;
 

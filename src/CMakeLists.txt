@@ -46,7 +46,7 @@ install(
 
 install(
   FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/tpcds.idx
+    ${CMAKE_CURRENT_SOURCE_DIR}/tpcds/tpcds-kit/tools/tpcds.idx
   DESTINATION
     ${TPCDS_INSTALL_DIR}
 )

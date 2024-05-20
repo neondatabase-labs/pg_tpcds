@@ -47,7 +47,7 @@ static int tpcds_num_queries() {
   return tpcds::TPCDSWrapper::QueriesCount();
 }
 
-static char* dsdgen(int scale_factor, char* table, bool overwrite) {
+static bool dsdgen(int scale_factor, char* table, bool overwrite) {
   try {
     return tpcds::TPCDSWrapper::DSDGen(scale_factor, table, overwrite);
   } catch (const std::exception& e) {
@@ -143,8 +143,8 @@ Datum dsdgen(PG_FUNCTION_ARGS) {
   char* table = PG_GETARG_CSTRING(1);
   bool overwrite = PG_GETARG_BOOL(2);
 
-  char* csv_location = tpcds::dsdgen(sf, table, overwrite);
+  bool done = tpcds::dsdgen(sf, table, overwrite);
 
-  PG_RETURN_TEXT_P(cstring_to_text(csv_location));
+  PG_RETURN_BOOL(done);
 }
 }

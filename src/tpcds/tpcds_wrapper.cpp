@@ -50,12 +50,10 @@ class Executor {
   }
 };
 
-[[maybe_unused]] static double exec_spec(const auto &path,
-                                         const Executor &executor) {
+[[maybe_unused]] static double exec_spec(const auto &path, const Executor &executor) {
   if (std::filesystem::exists(path)) {
     std::ifstream file(path);
-    std::string sql((std::istreambuf_iterator<char>(file)),
-                    std::istreambuf_iterator<char>());
+    std::string sql((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     const auto start = std::chrono::high_resolution_clock::now();
     executor.execute(sql);
     const auto end = std::chrono::high_resolution_clock::now();
@@ -65,8 +63,7 @@ class Executor {
 }
 
 void TPCDSWrapper::CreateTPCDSSchema() {
-  const std::filesystem::path extension_dir =
-      get_extension_external_directory();
+  const std::filesystem::path extension_dir = get_extension_external_directory();
 
   Executor executor;
 
@@ -74,13 +71,11 @@ void TPCDSWrapper::CreateTPCDSSchema() {
 
   auto schema = extension_dir / "schema";
   if (std::filesystem::exists(schema)) {
-    std::ranges::for_each(
-        std::filesystem::directory_iterator(schema), [&](const auto &entry) {
-          std::ifstream file(entry.path());
-          std::string sql((std::istreambuf_iterator<char>(file)),
-                          std::istreambuf_iterator<char>());
-          executor.execute(sql);
-        });
+    std::ranges::for_each(std::filesystem::directory_iterator(schema), [&](const auto &entry) {
+      std::ifstream file(entry.path());
+      std::string sql((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      executor.execute(sql);
+    });
   } else
     throw std::runtime_error("Schema file does not exist");
 
@@ -89,8 +84,7 @@ void TPCDSWrapper::CreateTPCDSSchema() {
 
 void TPCDSWrapper::CleanUpTPCDSSchema() {
   Executor executor;
-  const std::filesystem::path extension_dir =
-      get_extension_external_directory();
+  const std::filesystem::path extension_dir = get_extension_external_directory();
   exec_spec(extension_dir / "pg_tpcds_cleanup.sql", executor);
 }
 
@@ -100,18 +94,15 @@ uint32_t TPCDSWrapper::QueriesCount() {
 
 const char *TPCDSWrapper::GetQuery(int query) {
   if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
-    throw std::runtime_error(
-        std::format("Out of range TPC-DS query number {}", query));
+    throw std::runtime_error(std::format("Out of range TPC-DS query number {}", query));
   }
 
-  const std::filesystem::path extension_dir =
-      get_extension_external_directory();
+  const std::filesystem::path extension_dir = get_extension_external_directory();
 
   auto queries = extension_dir / "queries" / std::format("{:02d}.sql", query);
   if (std::filesystem::exists(queries)) {
     std::ifstream file(queries);
-    std::string sql((std::istreambuf_iterator<char>(file)),
-                    std::istreambuf_iterator<char>());
+    std::string sql((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
     return strdup(sql.c_str());
   }
@@ -120,12 +111,10 @@ const char *TPCDSWrapper::GetQuery(int query) {
 
 tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
   if (qid < 0 || qid > TPCDS_QUERIES_COUNT) {
-    throw std::runtime_error(
-        std::format("Out of range TPC-DS query number {}", qid));
+    throw std::runtime_error(std::format("Out of range TPC-DS query number {}", qid));
   }
 
-  const std::filesystem::path extension_dir =
-      get_extension_external_directory();
+  const std::filesystem::path extension_dir = get_extension_external_directory();
 
   Executor executor;
 
@@ -142,22 +131,56 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
 
     return result;
   } else
-    throw std::runtime_error(
-        std::format("Queries file for qid: {} does not exist", qid));
+    throw std::runtime_error(std::format("Queries file for qid: {} does not exist", qid));
 }
 
-char *TPCDSWrapper::DSDGen(int scale, char *table, bool overwrite) {
-  const std::filesystem::path extension_dir =
-      get_extension_external_directory();
-  TPCDSTableGenerator generator(scale, extension_dir);
-  // char sf[5];
-  // snprintf(sf, 10, "%d", scale);
-  // char dir[20];
-  // snprintf(dir, 20, "/tmp/sf_%d", scale);
-  // std::filesystem::create_directory(dir);
-  // return dsdgen_internal(sf, table, dir, overwrite);
-  generator.generate_call_center();
-  return nullptr;
+bool TPCDSWrapper::DSDGen(int scale, char *table, bool overwrite) {
+  const std::filesystem::path extension_dir = get_extension_external_directory();
+  TPCDSTableGenerator generator(scale, table, extension_dir);
+
+#define CASE(tbl)                 \
+  if (std::string{table} == #tbl) \
+    return generator.generate_##tbl();
+
+#define CASE_ERROR(tbl)           \
+  if (std::string{table} == #tbl) \
+    throw std::runtime_error(std::format("Table {} is a child; it is populated during the build of its parent", #tbl));
+
+  CASE(call_center)
+  CASE(catalog_page)
+  CASE(customer_address)
+  CASE(customer)
+  CASE(customer_demographics)
+  CASE(date_dim)
+  CASE(household_demographics)
+  CASE(income_band)
+  CASE(inventory)
+  CASE(item)
+  CASE(promotion)
+  CASE(reason)
+  CASE(ship_mode)
+  CASE(store)
+  CASE(time_dim)
+  CASE(warehouse)
+  CASE(web_page)
+  CASE(web_site)
+
+  CASE_ERROR(catalog_returns)
+  CASE_ERROR(store_returns)
+  CASE_ERROR(web_returns)
+
+  if (std::string{table} == "catalog_sales")
+    return generator.generate_catalog_sales_and_returns();
+
+  if (std::string{table} == "store_sales")
+    return generator.generate_store_sales_and_returns();
+
+  if (std::string{table} == "web_sales")
+    return generator.generate_web_sales_and_returns();
+
+#undef CASE_ERROR
+#undef CASE
+  return false;
 }
 
 }  // namespace tpcds
