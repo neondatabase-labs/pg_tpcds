@@ -27,7 +27,34 @@ cmake --build build --target install
 create extension pg_tpcds;
 
 -- generate data set for scale factor 1
-select dsdgen(1);
+select * from dsdgen(1);
+          tab           | row_count
+------------------------+-----------
+ call_center            |         6
+ catalog_page           |     11718
+ catalog_sales          |   1441548
+ catalog_returns        |   1441548
+ customer               |    100000
+ customer_address       |     50000
+ customer_demographics  |   1920800
+ date_dim               |     73049
+ household_demographics |      7200
+ income_band            |        20
+ inventory              |  11745000
+ item                   |     18000
+ promotion              |       300
+ reason                 |        35
+ ship_mode              |        20
+ store                  |        12
+ store_sales            |   2880404
+ store_returns          |   2880404
+ time_dim               |     86400
+ warehouse              |         5
+ web_page               |        60
+ web_sales              |    719384
+ web_returns            |    719384
+ web_site               |        30
+(24 rows)
 
 -- run all 99 queries, you can get detail result like following,
 --   NOTE: this is base on empty table
@@ -69,7 +96,7 @@ select * from tpcds_queries();
 select * from tpcds_queries(1);
 
 -- you can set query to a parameter
-select * from tpcds_queries(1); \gset
+select query from tpcds_queries(1); \gset
 
 -- and exec it
 :query
