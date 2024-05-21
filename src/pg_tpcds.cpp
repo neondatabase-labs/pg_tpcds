@@ -26,15 +26,6 @@ static bool tpcds_prepare() {
   return true;
 }
 
-static bool tpcds_cleanup() {
-  try {
-    tpcds::TPCDSWrapper::CleanUpTPCDSSchema();
-  } catch (const std::exception& e) {
-    elog(ERROR, "TPC-DS Failed to cleanup, get error: %s", e.what());
-  }
-  return true;
-}
-
 static const char* tpcds_queries(int qid) {
   try {
     return tpcds::TPCDSWrapper::GetQuery(qid);
@@ -47,9 +38,9 @@ static int tpcds_num_queries() {
   return tpcds::TPCDSWrapper::QueriesCount();
 }
 
-static bool dsdgen_internal(int scale_factor, char* table, bool overwrite) {
+static int dsdgen_internal(int scale_factor, char* table, int max_row) {
   try {
-    return tpcds::TPCDSWrapper::DSDGen(scale_factor, table, overwrite);
+    return tpcds::TPCDSWrapper::DSDGen(scale_factor, table, max_row);
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to dsdgen, get error: %s", e.what());
   }
@@ -72,13 +63,6 @@ PG_MODULE_MAGIC;
 PG_FUNCTION_INFO_V1(tpcds_prepare);
 Datum tpcds_prepare(PG_FUNCTION_ARGS) {
   bool result = tpcds::tpcds_prepare();
-
-  PG_RETURN_BOOL(result);
-}
-
-PG_FUNCTION_INFO_V1(tpcds_cleanup);
-Datum tpcds_cleanup(PG_FUNCTION_ARGS) {
-  bool result = tpcds::tpcds_cleanup();
 
   PG_RETURN_BOOL(result);
 }
@@ -141,10 +125,10 @@ PG_FUNCTION_INFO_V1(dsdgen_internal);
 Datum dsdgen_internal(PG_FUNCTION_ARGS) {
   int sf = PG_GETARG_INT32(0);
   char* table = text_to_cstring(PG_GETARG_TEXT_PP(1));
-  bool overwrite = PG_GETARG_BOOL(2);
+  int max_row = PG_GETARG_INT32(2);
 
-  bool done = tpcds::dsdgen_internal(sf, table, overwrite);
+  int row_count = tpcds::dsdgen_internal(sf, table, max_row);
 
-  PG_RETURN_BOOL(done);
+  PG_RETURN_INT32(row_count);
 }
 }

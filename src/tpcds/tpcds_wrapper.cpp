@@ -82,12 +82,6 @@ void TPCDSWrapper::CreateTPCDSSchema() {
   exec_spec(extension_dir / "post_prepare.sql", executor);
 }
 
-void TPCDSWrapper::CleanUpTPCDSSchema() {
-  Executor executor;
-  const std::filesystem::path extension_dir = get_extension_external_directory();
-  exec_spec(extension_dir / "pg_tpcds_cleanup.sql", executor);
-}
-
 uint32_t TPCDSWrapper::QueriesCount() {
   return TPCDS_QUERIES_COUNT;
 }
@@ -134,9 +128,9 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
     throw std::runtime_error(std::format("Queries file for qid: {} does not exist", qid));
 }
 
-bool TPCDSWrapper::DSDGen(int scale, char *table, bool overwrite) {
+int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
   const std::filesystem::path extension_dir = get_extension_external_directory();
-  TPCDSTableGenerator generator(scale, table, extension_dir);
+  TPCDSTableGenerator generator(scale, table, max_row, extension_dir);
 
 #define CASE(tbl)                 \
   if (std::string{table} == #tbl) \
@@ -180,7 +174,7 @@ bool TPCDSWrapper::DSDGen(int scale, char *table, bool overwrite) {
 
 #undef CASE_ERROR
 #undef CASE
-  return false;
+  throw std::runtime_error(std::format("Table {} does not exist", table));
 }
 
 }  // namespace tpcds

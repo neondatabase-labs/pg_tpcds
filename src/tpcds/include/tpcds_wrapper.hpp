@@ -15,7 +15,7 @@ struct tpcds_runner_result {
 
 struct TPCDSWrapper {
   //! Generate the TPC-DS data of the given scale factor
-  static bool DSDGen(int scale, char* table, bool overwrite);
+  static int DSDGen(int scale, char* table, int max_row);
 
   static uint32_t QueriesCount();
   //! Gets the specified TPC-DS Query number as a string
@@ -23,7 +23,6 @@ struct TPCDSWrapper {
 
   static void CreateTPCDSSchema();
 
-  static void CleanUpTPCDSSchema();
 
   static tpcds_runner_result* RunTPCDS(int qid);
 };

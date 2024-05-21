@@ -25,29 +25,9 @@ extern "C" {
 #include <utils/builtins.h>
 
 // TODO split pg functions into other file
-#ifdef vsnprintf
-#undef vsnprintf
-#endif
+
 #ifdef snprintf
 #undef snprintf
-#endif
-#ifdef vsprintf
-#undef vsprintf
-#endif
-#ifdef sprintf
-#undef sprintf
-#endif
-#ifdef vfprintf
-#undef vfprintf
-#endif
-#ifdef fprintf
-#undef fprintf
-#endif
-#ifdef vprintf
-#undef vprintf
-#endif
-#ifdef printf
-#undef printf
 #endif
 
 #include "tpcds-kit/tools/address.h"
@@ -175,9 +155,9 @@ std::string zip_to_string(int32_t zip) {
   return result;
 }
 
-TPCDSTableGenerator::TPCDSTableGenerator(uint32_t scale_factor, const std::string& table,
+TPCDSTableGenerator::TPCDSTableGenerator(uint32_t scale_factor, const std::string& table, int max_row,
                                          std::filesystem::path resource_dir, int rng_seed)
-    : table_{std::move(table)}, _scale_factor{scale_factor} {
+    : table_{std::move(table)}, _scale_factor{scale_factor}, max_row_{max_row} {
   init_tpcds_tools(scale_factor, resource_dir.string(), rng_seed);
   // atexit([]() { throw std::runtime_error("TPCDSTableGenerator internal error"); });
 }
@@ -200,6 +180,7 @@ class TableLoader {
 
   auto& start() {
     curr_batch_++;
+    row_count_++;
     if (curr_batch_ < batch_size_) {
       if (curr_batch_ != 1)
         sql += ",";
@@ -268,6 +249,8 @@ class TableLoader {
     return *this;
   }
 
+  auto row_count() const { return row_count_; }
+
  private:
   std::string table_;
   std::string sql;
@@ -275,6 +258,7 @@ class TableLoader {
   size_t curr_cid_ = 0;
   size_t batch_size_;
   size_t curr_batch_ = 0;
+  size_t row_count_ = 0;
 };
 
 // dsdgen deliberately creates NULL values if nullCheck(column_id) is true,
@@ -339,7 +323,7 @@ std::optional<float> resolve_decimal(int column_id, decimal_t decimal) {
   return nullCheck(column_id) != 0 ? std::nullopt : std::optional{static_cast<float>(result / 10)};
 }
 
-bool TPCDSTableGenerator::generate_call_center() const {
+int TPCDSTableGenerator::generate_call_center() const {
   auto [call_center_first, call_center_count] = prepare_for_table(CALL_CENTER);
 
   auto call_center = CALL_CENTER_TBL{};
@@ -384,12 +368,14 @@ bool TPCDSTableGenerator::generate_call_center() const {
         .addItem(resolve_decimal(CC_TAX_PERCENTAGE, call_center.cc_tax_percentage))
         .end();
     tpcds_row_stop(CALL_CENTER);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_catalog_page() const {
+int TPCDSTableGenerator::generate_catalog_page() const {
   auto [catalog_page_first, catalog_page_count] = prepare_for_table(CATALOG_PAGE);
 
   auto catalog_page = CATALOG_PAGE_TBL{};
@@ -417,12 +403,14 @@ bool TPCDSTableGenerator::generate_catalog_page() const {
         .end();
 
     tpcds_row_stop(CATALOG_PAGE);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_catalog_sales_and_returns() const {
+int TPCDSTableGenerator::generate_catalog_sales_and_returns() const {
   auto [catalog_sales_first, catalog_sales_count] = prepare_for_table(CATALOG_SALES);
   // catalog_sales_count is NOT the actual number of catalog sales created, for each of these "master" catalog_sales
   // multiple "detail" catalog sales are created and possibly returned
@@ -444,7 +432,7 @@ bool TPCDSTableGenerator::generate_catalog_sales_and_returns() const {
         auto was_returned = int{0};
         mk_w_catalog_sales_detail(&catalog_sales, 0, &catalog_returns, &was_returned);
 
-        {
+        if (loader_catalog_sales.row_count() < max_row_) {
           loader_catalog_sales.start()
               .addItem(resolve_key(CS_SOLD_DATE_SK, catalog_sales.cs_sold_date_sk))
               .addItem(resolve_key(CS_SOLD_TIME_SK, catalog_sales.cs_sold_time_sk))
@@ -514,16 +502,18 @@ bool TPCDSTableGenerator::generate_catalog_sales_and_returns() const {
               .addItem(resolve_decimal(CR_PRICING_STORE_CREDIT, catalog_returns.cr_pricing.store_credit))
               .addItem(resolve_decimal(CR_PRICING_NET_LOSS, catalog_returns.cr_pricing.net_loss))
               .end();
+          if (loader_catalog_returns.row_count() == max_row_)
+            break;
         }
       }
     }
     tpcds_row_stop(CATALOG_SALES);
   }
 
-  return true;
+  return std::max(loader_catalog_returns.row_count(), loader_catalog_sales.row_count());
 }
 
-bool TPCDSTableGenerator::generate_customer_address() const {
+int TPCDSTableGenerator::generate_customer_address() const {
   auto [customer_address_first, customer_address_count] = prepare_for_table(CUSTOMER_ADDRESS);
 
   TableLoader loader(table_, 13, 100);
@@ -547,12 +537,16 @@ bool TPCDSTableGenerator::generate_customer_address() const {
         .addItem(resolve_gmt_offset(CA_ADDRESS_GMT_OFFSET, customer_address.ca_address.gmt_offset))
         .addItem(resolve_string(CA_LOCATION_TYPE, customer_address.ca_location_type))
         .end();
+
+    tpcds_row_stop(CUSTOMER_ADDRESS);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_customer() const {
+int TPCDSTableGenerator::generate_customer() const {
   auto [customer_first, customer_count] = prepare_for_table(CUSTOMER);
 
   TableLoader loader(table_, 18, 100);
@@ -579,12 +573,16 @@ bool TPCDSTableGenerator::generate_customer() const {
         .addItem(resolve_string(C_EMAIL_ADDRESS, customer.c_email_address))
         .addItem(resolve_integer(C_LAST_REVIEW_DATE, customer.c_last_review_date))
         .end();
+
+    tpcds_row_stop(CUSTOMER);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_customer_demographics() const {
+int TPCDSTableGenerator::generate_customer_demographics() const {
   auto [customer_demographics_first, customer_demographics_count] = prepare_for_table(CUSTOMER_DEMOGRAPHICS);
 
   TableLoader loader(table_, 9, 100);
@@ -605,12 +603,16 @@ bool TPCDSTableGenerator::generate_customer_demographics() const {
         .addItem(resolve_integer(CD_DEP_EMPLOYED_COUNT, customer_demographics.cd_dep_employed_count))
         .addItem(resolve_integer(CD_DEP_COLLEGE_COUNT, customer_demographics.cd_dep_college_count))
         .end();
+
+    tpcds_row_stop(CUSTOMER_DEMOGRAPHICS);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_date_dim() const {
+int TPCDSTableGenerator::generate_date_dim() const {
   auto [date_first, date_count] = prepare_for_table(DATE);
   TableLoader loader(table_, 28, 100);
   for (auto date_index = ds_key_t{0}; date_index < date_count; ++date_index) {
@@ -648,12 +650,15 @@ bool TPCDSTableGenerator::generate_date_dim() const {
         .addItem(resolve_string(D_CURRENT_QUARTER, boolean_to_string(date.d_current_quarter != 0)))
         .addItem(resolve_string(D_CURRENT_YEAR, boolean_to_string(date.d_current_year != 0)))
         .end();
+    tpcds_row_stop(DATE);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_household_demographics() const {
+int TPCDSTableGenerator::generate_household_demographics() const {
   auto [household_demographics_first, household_demographics_count] = prepare_for_table(HOUSEHOLD_DEMOGRAPHICS);
 
   TableLoader loader(table_, 5, 100);
@@ -671,12 +676,16 @@ bool TPCDSTableGenerator::generate_household_demographics() const {
         .addItem(resolve_integer(HD_DEP_COUNT, household_demographics.hd_dep_count))
         .addItem(resolve_integer(HD_VEHICLE_COUNT, household_demographics.hd_vehicle_count))
         .end();
+
+    tpcds_row_stop(HOUSEHOLD_DEMOGRAPHICS);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_income_band() const {
+int TPCDSTableGenerator::generate_income_band() const {
   auto [income_band_first, income_band_count] = prepare_for_table(INCOME_BAND);
   TableLoader loader(table_, 3, 100);
 
@@ -689,12 +698,15 @@ bool TPCDSTableGenerator::generate_income_band() const {
         .addItem(resolve_integer(IB_LOWER_BOUND, income_band.ib_lower_bound))
         .addItem(resolve_integer(IB_UPPER_BOUND, income_band.ib_upper_bound))
         .end();
+    tpcds_row_stop(INCOME_BAND);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_inventory() const {
+int TPCDSTableGenerator::generate_inventory() const {
   auto [inventory_first, inventory_count] = prepare_for_table(INVENTORY);
 
   TableLoader loader(table_, 4, 100);
@@ -709,12 +721,15 @@ bool TPCDSTableGenerator::generate_inventory() const {
         .addItem(resolve_key(INV_WAREHOUSE_SK, inventory.inv_warehouse_sk))
         .addItem(resolve_integer(INV_QUANTITY_ON_HAND, inventory.inv_quantity_on_hand))
         .end();
+    tpcds_row_stop(INVENTORY);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_item() const {
+int TPCDSTableGenerator::generate_item() const {
   auto [item_first, item_count] = prepare_for_table(ITEM);
 
   TableLoader loader(table_, 22, 100);
@@ -746,12 +761,15 @@ bool TPCDSTableGenerator::generate_item() const {
         .addItem(resolve_key(I_MANAGER_ID, item.i_manager_id))
         .addItem(resolve_string(I_PRODUCT_NAME, item.i_product_name))
         .end();
+    tpcds_row_stop(ITEM);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_promotion() const {
+int TPCDSTableGenerator::generate_promotion() const {
   auto [promotion_first, promotion_count] = prepare_for_table(PROMOTION);
 
   TableLoader loader(table_, 19, 100);
@@ -781,12 +799,15 @@ bool TPCDSTableGenerator::generate_promotion() const {
         .addItem(resolve_string(P_PURPOSE, promotion.p_purpose))
         .addItem(resolve_string(P_DISCOUNT_ACTIVE, boolean_to_string(promotion.p_discount_active != 0)))
         .end();
+    tpcds_row_stop(PROMOTION);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_reason() const {
+int TPCDSTableGenerator::generate_reason() const {
   auto [reason_first, reason_count] = prepare_for_table(REASON);
 
   TableLoader loader(table_, 3, 100);
@@ -799,12 +820,15 @@ bool TPCDSTableGenerator::generate_reason() const {
         .addItem(resolve_string(R_REASON_ID, reason.r_reason_id))
         .addItem(resolve_string(R_REASON_DESCRIPTION, reason.r_reason_description))
         .end();
+    tpcds_row_stop(REASON);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_ship_mode() const {
+int TPCDSTableGenerator::generate_ship_mode() const {
   auto [ship_mode_first, ship_mode_count] = prepare_for_table(SHIP_MODE);
 
   TableLoader loader(table_, 6, 100);
@@ -821,12 +845,16 @@ bool TPCDSTableGenerator::generate_ship_mode() const {
         .addItem(resolve_string(SM_CARRIER, ship_mode.sm_carrier))
         .addItem(resolve_string(SM_CONTRACT, ship_mode.sm_contract))
         .end();
+    tpcds_row_stop(SHIP_MODE);
+
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_store() const {
+int TPCDSTableGenerator::generate_store() const {
   auto [store_first, store_count] = prepare_for_table(STORE);
 
   TableLoader loader(table_, 29, 100);
@@ -865,12 +893,15 @@ bool TPCDSTableGenerator::generate_store() const {
         .addItem(resolve_gmt_offset(W_STORE_ADDRESS_GMT_OFFSET, store.address.gmt_offset))
         .addItem(resolve_decimal(W_STORE_TAX_PERCENTAGE, store.dTaxPercentage))
         .end();
+    tpcds_row_stop(STORE);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_store_sales_and_returns() const {
+int TPCDSTableGenerator::generate_store_sales_and_returns() const {
   auto [store_sales_first, store_sales_count] = prepare_for_table(STORE_SALES);
 
   TableLoader loader_store_sales("store_sales", 23, 100);
@@ -890,7 +921,7 @@ bool TPCDSTableGenerator::generate_store_sales_and_returns() const {
         auto was_returned = int{0};
         mk_w_store_sales_detail(&store_sales, 0, &store_returns, &was_returned);
 
-        {
+        if (loader_store_sales.row_count() < max_row_) {
           loader_store_sales.start()
               .addItem(resolve_key(SS_SOLD_DATE_SK, store_sales.ss_sold_date_sk))
               .addItem(resolve_key(SS_SOLD_TIME_SK, store_sales.ss_sold_time_sk))
@@ -942,16 +973,18 @@ bool TPCDSTableGenerator::generate_store_sales_and_returns() const {
               .addItem(resolve_decimal(SR_PRICING_STORE_CREDIT, store_returns.sr_pricing.store_credit))
               .addItem(resolve_decimal(SR_PRICING_NET_LOSS, store_returns.sr_pricing.net_loss))
               .end();
+          if (loader_store_returns.row_count() >= max_row_)
+            break;
         }
       }
     }
     tpcds_row_stop(STORE_SALES);
   }
 
-  return true;
+  return std::max(loader_store_sales.row_count(), loader_store_returns.row_count());
 }
 
-bool TPCDSTableGenerator::generate_time_dim() const {
+int TPCDSTableGenerator::generate_time_dim() const {
   auto [time_first, time_count] = prepare_for_table(TIME);
 
   TableLoader loader(table_, 10, 100);
@@ -971,12 +1004,15 @@ bool TPCDSTableGenerator::generate_time_dim() const {
         .addItem(resolve_string(T_SUB_SHIFT, time.t_sub_shift))
         .addItem(resolve_string(T_MEAL_TIME, time.t_meal_time))
         .end();
+    tpcds_row_stop(TIME);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_warehouse() const {
+int TPCDSTableGenerator::generate_warehouse() const {
   auto [warehouse_first, warehouse_count] = prepare_for_table(WAREHOUSE);
 
   TableLoader loader(table_, 14, 100);
@@ -1001,12 +1037,15 @@ bool TPCDSTableGenerator::generate_warehouse() const {
         .addItem(resolve_string(W_ADDRESS_COUNTRY, warehouse.w_address.country))
         .addItem(resolve_gmt_offset(W_ADDRESS_GMT_OFFSET, warehouse.w_address.gmt_offset))
         .end();
+    tpcds_row_stop(WAREHOUSE);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_web_page() const {
+int TPCDSTableGenerator::generate_web_page() const {
   auto [web_page_first, web_page_count] = prepare_for_table(WEB_PAGE);
 
   TableLoader loader(table_, 14, 100);
@@ -1030,12 +1069,15 @@ bool TPCDSTableGenerator::generate_web_page() const {
         .addItem(resolve_integer(WP_IMAGE_COUNT, web_page.wp_image_count))
         .addItem(resolve_integer(WP_MAX_AD_COUNT, web_page.wp_max_ad_count))
         .end();
+    tpcds_row_stop(WEB_PAGE);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
-bool TPCDSTableGenerator::generate_web_sales_and_returns() const {
+int TPCDSTableGenerator::generate_web_sales_and_returns() const {
   auto [web_sales_first, web_sales_count] = prepare_for_table(WEB_SALES);
 
   TableLoader loader_web_sales("web_sales", 34, 100);
@@ -1055,7 +1097,7 @@ bool TPCDSTableGenerator::generate_web_sales_and_returns() const {
         auto was_returned = 0;
         mk_w_web_sales_detail(&web_sales, 0, &web_returns, &was_returned, 0);
 
-        {
+        if (loader_web_sales.row_count() < max_row_) {
           loader_web_sales.start()
               .addItem(resolve_key(WS_SOLD_DATE_SK, web_sales.ws_sold_date_sk))
               .addItem(resolve_key(WS_SOLD_TIME_SK, web_sales.ws_sold_time_sk))
@@ -1121,16 +1163,18 @@ bool TPCDSTableGenerator::generate_web_sales_and_returns() const {
               .addItem(resolve_decimal(WR_PRICING_STORE_CREDIT, web_returns.wr_pricing.store_credit))
               .addItem(resolve_decimal(WR_PRICING_NET_LOSS, web_returns.wr_pricing.net_loss))
               .end();
+          if (loader_web_returns.row_count() >= max_row_)
+            break;
         }
       }
     }
     tpcds_row_stop(WEB_SALES);
   }
 
-  return true;
+  return std::max(loader_web_sales.row_count(), loader_web_returns.row_count());
 }
 
-bool TPCDSTableGenerator::generate_web_site() const {
+int TPCDSTableGenerator::generate_web_site() const {
   auto [web_site_first, web_site_count] = prepare_for_table(WEB_SITE);
 
   TableLoader loader(table_, 26, 100);
@@ -1172,9 +1216,11 @@ bool TPCDSTableGenerator::generate_web_site() const {
         .addItem(resolve_decimal(WEB_TAX_PERCENTAGE, web_site.web_tax_percentage))
         .end();
     tpcds_row_stop(WEB_SITE);
+    if (loader.row_count() >= max_row_)
+      break;
   }
 
-  return true;
+  return loader.row_count();
 }
 
 }  // namespace tpcds

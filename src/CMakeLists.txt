@@ -39,13 +39,6 @@ install(
 
 install(
   FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/pg_tpcds_cleanup.sql
-  DESTINATION
-    ${TPCDS_INSTALL_DIR}
-)
-
-install(
-  FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/tpcds/tpcds-kit/tools/tpcds.idx
   DESTINATION
     ${TPCDS_INSTALL_DIR}

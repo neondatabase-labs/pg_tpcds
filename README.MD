@@ -14,6 +14,7 @@ make sure you have installed the postgres and the `pg_config` is in your PATH.
 
 ```
 git clone https://github.com/asky/pg_tpcds.git
+git submodule update
 cd pg_tpcds
 cmake -Bbuild
 cmake --build build --target install
@@ -26,7 +27,7 @@ cmake --build build --target install
 create extension pg_tpcds;
 
 -- generate data set for scale factor 1
-select dsdgen(1, true);
+select dsdgen(1);
 
 -- run all 99 queries, you can get detail result like following,
 --   NOTE: this is base on empty table
@@ -64,7 +65,7 @@ select * from tpcds(1,2,3,5,8);
 -- get all queries
 select * from tpcds_queries();
 
--- get query by id, 1 to 99
+-- get query by id, from 1 to 99
 select * from tpcds_queries(1);
 
 -- you can set query to a parameter
@@ -73,14 +74,14 @@ select * from tpcds_queries(1); \gset
 -- and exec it
 :query
 
--- clean up tpds tables by drop extension pg_tpcds;
-drop extension pg_tpcds;
-
--- or just drop tables
+-- or cleanup all tables
 select tpcds_cleanup();
 
--- and create tables again
-select tpcds_prepare();
+-- and regenerated data set for other scale factor 
+select dsdgen(2);
+
+-- drop extension pg_tpcds will auto remove all tables and functions
+drop extension pg_tpcds;
 
 ```
 
@@ -89,7 +90,7 @@ select tpcds_prepare();
 * 99 SQL statements have been provided here in advance. you can modify the SQL statement before installing the extension,  the file located at `src/tpcds/queries`.
 * Standard table creation statements are provided here for your configuration. The file is located at `src/tpcds/schema`.
    * You can directly modify the table creation statements, such as specifying primary keys.
-   * Alternatively, you can configure index creation statements in the file `src/post_prepare.sql`, which will be invoked after table creation. those sql will be invoked in function  `tpcds_prepare()`.
+   * Alternatively, you can configure index creation statements in the file `src/post_prepare.sql`, which will be invoked after table creation
 
 
 ### TEST
