@@ -33,6 +33,7 @@ tokenizer.c
 checksum
 .ctags_updated
 tags
+.vscode
 
 # Flat files
 *.dat
