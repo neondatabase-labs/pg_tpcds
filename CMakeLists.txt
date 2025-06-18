@@ -10,8 +10,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
-set(PostgreSQL_CONFIG_EXECUTABLE "/usr/lib/postgresql/16/bin/pg_config")
-
 find_package(PostgreSQL REQUIRED)
 
 add_subdirectory(src)
