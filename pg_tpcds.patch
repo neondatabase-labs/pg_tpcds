@@ -1,0 +1,185 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7efb42f..a508e7c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,6 +10,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
+ 
+ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+ 
++set(PostgreSQL_CONFIG_EXECUTABLE "/usr/lib/postgresql/16/bin/pg_config")
++
+ find_package(PostgreSQL REQUIRED)
+ 
+ add_subdirectory(src)
+@@ -18,4 +20,4 @@ add_subdirectory(src)
+ add_custom_target(format
+   COMMAND git diff --name-only --diff-filter=d --cached '*.cpp' '*.h' | xargs clang-format -i
+   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+-)
+\ No newline at end of file
++)
+diff --git a/src/tpcds/CMakeLists.txt b/src/tpcds/CMakeLists.txt
+index 4cf285e..3878d02 100644
+--- a/src/tpcds/CMakeLists.txt
++++ b/src/tpcds/CMakeLists.txt
+@@ -129,7 +129,9 @@ endif()
+ add_library(tpcds STATIC
+ tpcds_dsdgen.cpp tpcds_wrapper.cpp)
+ 
+-target_link_libraries(tpcds tpcds_dbgen)
++find_package(fmt REQUIRED)
++
++target_link_libraries(tpcds tpcds_dbgen fmt::fmt)
+ 
+ target_include_directories(tpcds PUBLIC
+   ${CMAKE_CURRENT_SOURCE_DIR}/include
+diff --git a/src/tpcds/tpcds_dsdgen.cpp b/src/tpcds/tpcds_dsdgen.cpp
+index ba09f53..31f7ee9 100644
+--- a/src/tpcds/tpcds_dsdgen.cpp
++++ b/src/tpcds/tpcds_dsdgen.cpp
+@@ -6,7 +6,8 @@
+ #include <cstdint>
+ #include <cstdio>
+ #include <filesystem>
+-#include <format>
++#include <fmt/core.h>
++//#include <format>
+ #include <limits>
+ #include <memory>
+ #include <optional>
+@@ -172,7 +173,7 @@ class TableLoader {
+ 
+   ~TableLoader() {
+     if (curr_batch_ != 0) {
+-      auto insert = std::format("INSERT INTO {} VALUES {}", table_, sql);
++      auto insert = fmt::format("INSERT INTO {} VALUES {}", table_, sql);
+       SPI_exec(insert.c_str(), 0);
+     }
+     SPI_finish();
+@@ -186,7 +187,7 @@ class TableLoader {
+         sql += ",";
+     } else {
+       // do insert
+-      auto insert = std::format("INSERT INTO {} VALUES {}", table_, sql);
++      auto insert = fmt::format("INSERT INTO {} VALUES {}", table_, sql);
+       auto result = SPI_exec(insert.c_str(), 0);
+       if (result != SPI_OK_INSERT) {
+         throw std::runtime_error("TPCDSTableGenerator internal error");
+@@ -212,11 +213,11 @@ class TableLoader {
+ 
+     if (value.has_value()) {
+       if constexpr (std::same_as<T, std::string>)
+-        sql += std::format("'{}'{}", value.value(), pos);
++        sql += fmt::format("'{}'{}", value.value(), pos);
+       else
+-        sql += std::format("{}{}", value.value(), pos);
++        sql += fmt::format("{}{}", value.value(), pos);
+     } else
+-      sql += std::format("null{}", pos);
++      sql += fmt::format("null{}", pos);
+ 
+     return *this;
+   }
+@@ -233,9 +234,9 @@ class TableLoader {
+       pos = "";
+ 
+     if constexpr (std::is_same_v<T, char*>)
+-      sql += std::format("'{}'{}", value, pos);
++      sql += fmt::format("'{}'{}", value, pos);
+     else
+-      sql += std::format("{}{}", value, pos);
++      sql += fmt::format("{}{}", value, pos);
+ 
+     return *this;
+   }
+diff --git a/src/tpcds/tpcds_wrapper.cpp b/src/tpcds/tpcds_wrapper.cpp
+index 4cb3390..5704d5a 100644
+--- a/src/tpcds/tpcds_wrapper.cpp
++++ b/src/tpcds/tpcds_wrapper.cpp
+@@ -13,7 +13,8 @@ extern "C" {
+ #include <cassert>
+ #include <exception>
+ #include <filesystem>
+-#include <format>
++//#include <format>
++#include <fmt/core.h>
+ #include <fstream>
+ #include <ranges>
+ #include <stdexcept>
+@@ -28,7 +29,7 @@ static auto get_extension_external_directory(void) {
+   char sharepath[MAXPGPATH];
+ 
+   get_share_path(my_exec_path, sharepath);
+-  auto path = std::format("{}/extension/tpcds", sharepath);
++  auto path = fmt::format("{}/extension/tpcds", sharepath);
+   return std::move(path);
+ }
+ 
+@@ -46,7 +47,7 @@ class Executor {
+ 
+   void execute(const std::string &query) const {
+     if (auto ret = SPI_exec(query.c_str(), 0); ret < 0)
+-      throw std::runtime_error(std::format("SPI_exec Failed, get {}", ret));
++      throw std::runtime_error(fmt::format("SPI_exec Failed, get {}", ret));
+   }
+ };
+ 
+@@ -88,12 +89,12 @@ uint32_t TPCDSWrapper::QueriesCount() {
+ 
+ const char *TPCDSWrapper::GetQuery(int query) {
+   if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
+-    throw std::runtime_error(std::format("Out of range TPC-DS query number {}", query));
++    throw std::runtime_error(fmt::format("Out of range TPC-DS query number {}", query));
+   }
+ 
+   const std::filesystem::path extension_dir = get_extension_external_directory();
+ 
+-  auto queries = extension_dir / "queries" / std::format("{:02d}.sql", query);
++  auto queries = extension_dir / "queries" / fmt::format("{:02d}.sql", query);
+   if (std::filesystem::exists(queries)) {
+     std::ifstream file(queries);
+     std::string sql((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+@@ -105,14 +106,14 @@ const char *TPCDSWrapper::GetQuery(int query) {
+ 
+ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
+   if (qid < 0 || qid > TPCDS_QUERIES_COUNT) {
+-    throw std::runtime_error(std::format("Out of range TPC-DS query number {}", qid));
++    throw std::runtime_error(fmt::format("Out of range TPC-DS query number {}", qid));
+   }
+ 
+   const std::filesystem::path extension_dir = get_extension_external_directory();
+ 
+   Executor executor;
+ 
+-  auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
++  auto queries = extension_dir / "queries" / fmt::format("{:02d}.sql", qid);
+ 
+   if (std::filesystem::exists(queries)) {
+     auto *result = (tpcds_runner_result *)palloc(sizeof(tpcds_runner_result));
+@@ -125,7 +126,7 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
+ 
+     return result;
+   } else
+-    throw std::runtime_error(std::format("Queries file for qid: {} does not exist", qid));
++    throw std::runtime_error(fmt::format("Queries file for qid: {} does not exist", qid));
+ }
+ 
+ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
+@@ -138,7 +139,7 @@ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
+ 
+ #define CASE_ERROR(tbl)           \
+   if (std::string{table} == #tbl) \
+-    throw std::runtime_error(std::format("Table {} is a child; it is populated during the build of its parent", #tbl));
++    throw std::runtime_error(fmt::format("Table {} is a child; it is populated during the build of its parent", #tbl));
+ 
+   CASE(call_center)
+   CASE(catalog_page)
+@@ -174,7 +175,7 @@ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
+ 
+ #undef CASE_ERROR
+ #undef CASE
+-  throw std::runtime_error(std::format("Table {} does not exist", table));
++  throw std::runtime_error(fmt::format("Table {} does not exist", table));
+ }
+ 
+ }  // namespace tpcds

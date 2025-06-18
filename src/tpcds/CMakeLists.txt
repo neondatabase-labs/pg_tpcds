@@ -129,7 +129,9 @@ endif()
 add_library(tpcds STATIC
 tpcds_dsdgen.cpp tpcds_wrapper.cpp)
 
-target_link_libraries(tpcds tpcds_dbgen)
+find_package(fmt REQUIRED)
+
+target_link_libraries(tpcds tpcds_dbgen fmt::fmt)
 
 target_include_directories(tpcds PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

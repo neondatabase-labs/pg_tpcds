@@ -13,7 +13,8 @@ extern "C" {
 #include <cassert>
 #include <exception>
 #include <filesystem>
-#include <format>
+//#include <format>
+#include <fmt/core.h>
 #include <fstream>
 #include <ranges>
 #include <stdexcept>
@@ -28,7 +29,7 @@ static auto get_extension_external_directory(void) {
   char sharepath[MAXPGPATH];
 
   get_share_path(my_exec_path, sharepath);
-  auto path = std::format("{}/extension/tpcds", sharepath);
+  auto path = fmt::format("{}/extension/tpcds", sharepath);
   return std::move(path);
 }
 
@@ -46,7 +47,7 @@ class Executor {
 
   void execute(const std::string &query) const {
     if (auto ret = SPI_exec(query.c_str(), 0); ret < 0)
-      throw std::runtime_error(std::format("SPI_exec Failed, get {}", ret));
+      throw std::runtime_error(fmt::format("SPI_exec Failed, get {}", ret));
   }
 };
 
@@ -88,12 +89,12 @@ uint32_t TPCDSWrapper::QueriesCount() {
 
 const char *TPCDSWrapper::GetQuery(int query) {
   if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
-    throw std::runtime_error(std::format("Out of range TPC-DS query number {}", query));
+    throw std::runtime_error(fmt::format("Out of range TPC-DS query number {}", query));
   }
 
   const std::filesystem::path extension_dir = get_extension_external_directory();
 
-  auto queries = extension_dir / "queries" / std::format("{:02d}.sql", query);
+  auto queries = extension_dir / "queries" / fmt::format("{:02d}.sql", query);
   if (std::filesystem::exists(queries)) {
     std::ifstream file(queries);
     std::string sql((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
@@ -105,14 +106,14 @@ const char *TPCDSWrapper::GetQuery(int query) {
 
 tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
   if (qid < 0 || qid > TPCDS_QUERIES_COUNT) {
-    throw std::runtime_error(std::format("Out of range TPC-DS query number {}", qid));
+    throw std::runtime_error(fmt::format("Out of range TPC-DS query number {}", qid));
   }
 
   const std::filesystem::path extension_dir = get_extension_external_directory();
 
   Executor executor;
 
-  auto queries = extension_dir / "queries" / std::format("{:02d}.sql", qid);
+  auto queries = extension_dir / "queries" / fmt::format("{:02d}.sql", qid);
 
   if (std::filesystem::exists(queries)) {
     auto *result = (tpcds_runner_result *)palloc(sizeof(tpcds_runner_result));
@@ -125,7 +126,7 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
 
     return result;
   } else
-    throw std::runtime_error(std::format("Queries file for qid: {} does not exist", qid));
+    throw std::runtime_error(fmt::format("Queries file for qid: {} does not exist", qid));
 }
 
 int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
@@ -138,7 +139,7 @@ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
 
 #define CASE_ERROR(tbl)           \
   if (std::string{table} == #tbl) \
-    throw std::runtime_error(std::format("Table {} is a child; it is populated during the build of its parent", #tbl));
+    throw std::runtime_error(fmt::format("Table {} is a child; it is populated during the build of its parent", #tbl));
 
   CASE(call_center)
   CASE(catalog_page)
@@ -174,7 +175,7 @@ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
 
 #undef CASE_ERROR
 #undef CASE
-  throw std::runtime_error(std::format("Table {} does not exist", table));
+  throw std::runtime_error(fmt::format("Table {} does not exist", table));
 }
 
 }  // namespace tpcds

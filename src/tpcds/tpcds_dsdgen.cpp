@@ -6,7 +6,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
-#include <format>
+#include <fmt/core.h>
+//#include <format>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -172,7 +173,7 @@ class TableLoader {
 
   ~TableLoader() {
     if (curr_batch_ != 0) {
-      auto insert = std::format("INSERT INTO {} VALUES {}", table_, sql);
+      auto insert = fmt::format("INSERT INTO {} VALUES {}", table_, sql);
       SPI_exec(insert.c_str(), 0);
     }
     SPI_finish();
@@ -186,7 +187,7 @@ class TableLoader {
         sql += ",";
     } else {
       // do insert
-      auto insert = std::format("INSERT INTO {} VALUES {}", table_, sql);
+      auto insert = fmt::format("INSERT INTO {} VALUES {}", table_, sql);
       auto result = SPI_exec(insert.c_str(), 0);
       if (result != SPI_OK_INSERT) {
         throw std::runtime_error("TPCDSTableGenerator internal error");
@@ -212,11 +213,11 @@ class TableLoader {
 
     if (value.has_value()) {
       if constexpr (std::same_as<T, std::string>)
-        sql += std::format("'{}'{}", value.value(), pos);
+        sql += fmt::format("'{}'{}", value.value(), pos);
       else
-        sql += std::format("{}{}", value.value(), pos);
+        sql += fmt::format("{}{}", value.value(), pos);
     } else
-      sql += std::format("null{}", pos);
+      sql += fmt::format("null{}", pos);
 
     return *this;
   }
@@ -233,9 +234,9 @@ class TableLoader {
       pos = "";
 
     if constexpr (std::is_same_v<T, char*>)
-      sql += std::format("'{}'{}", value, pos);
+      sql += fmt::format("'{}'{}", value, pos);
     else
-      sql += std::format("{}{}", value, pos);
+      sql += fmt::format("{}{}", value, pos);
 
     return *this;
   }
