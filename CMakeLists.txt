@@ -12,6 +12,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 find_package(PostgreSQL REQUIRED)
 
+add_subdirectory(external/fmt)
+
 add_subdirectory(src)
 
 # clang-format

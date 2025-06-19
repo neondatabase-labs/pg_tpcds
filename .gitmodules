@@ -1,3 +1,6 @@
 [submodule "src/tpcds/tpcds-kit"]
 	path = src/tpcds/tpcds-kit
 	url = https://github.com/hyrise-mp/tpcds-kit.git
+[submodule "external/fmt"]
+	path = external/fmt
+	url = https://github.com/fmtlib/fmt.git
