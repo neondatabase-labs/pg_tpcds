@@ -18,11 +18,13 @@
 extern "C" {
 #include <postgres.h>
 
+#include <access/table.h>
 #include <executor/spi.h>
 #include <lib/stringinfo.h>
 #include <libpq/pqformat.h>
 #include <miscadmin.h>
 #include <utils/builtins.h>
+#include <utils/lsyscache.h>
 
 // TODO split pg functions into other file
 
@@ -164,102 +166,104 @@ TPCDSTableGenerator::TPCDSTableGenerator(uint32_t scale_factor, const std::strin
 
 class TableLoader {
  public:
-  TableLoader(const std::string& table, size_t col_size, size_t batch_size)
-      : table_{std::move(table)}, col_size_(col_size), batch_size_(batch_size) {
-    if (SPI_connect() != SPI_OK_CONNECT)
-      throw std::runtime_error("SPI_connect Failed");
+  TableLoader(const std::string& table) : table_{std::move(table)} {
+    reloid_ = DirectFunctionCall1(regclassin, CStringGetDatum(table_.c_str()));
+    rel_ = try_table_open(reloid_, NoLock);
+    if (!rel_)
+      throw std::runtime_error("try_table_open Failed");
+
+    auto tupDesc = RelationGetDescr(rel_);
+    Oid in_func_oid;
+
+    in_functions = new FmgrInfo[tupDesc->natts];
+    typioparams = new Oid[tupDesc->natts];
+
+    for (auto attnum = 1; attnum <= tupDesc->natts; attnum++) {
+      Form_pg_attribute att = TupleDescAttr(tupDesc, attnum - 1);
+
+      getTypeInputInfo(att->atttypid, &in_func_oid, &typioparams[attnum - 1]);
+      fmgr_info(in_func_oid, &in_functions[attnum - 1]);
+    }
+
+    slot = MakeSingleTupleTableSlot(tupDesc, &TTSOpsMinimalTuple);
+    slot->tts_tableOid = RelationGetRelid(rel_);
   };
 
   ~TableLoader() {
-    if (curr_batch_ != 0) {
-      auto insert = std::format("INSERT INTO {} VALUES {}", table_, sql);
-      SPI_exec(insert.c_str(), 0);
-    }
-    SPI_finish();
+    table_close(rel_, NoLock);
+    free(in_functions);
+    free(typioparams);
+    ExecDropSingleTupleTableSlot(slot);
   }
 
-  auto& start() {
-    curr_batch_++;
-    row_count_++;
-    if (curr_batch_ < batch_size_) {
-      if (curr_batch_ != 1)
-        sql += ",";
-    } else {
-      // do insert
-      auto insert = std::format("INSERT INTO {} VALUES {}", table_, sql);
-      auto result = SPI_exec(insert.c_str(), 0);
-      if (result != SPI_OK_INSERT) {
-        throw std::runtime_error("TPCDSTableGenerator internal error");
-      }
-      sql.clear();
-      curr_batch_ = 1;
-    }
-    sql += "(";
+  template <typename T>
+  auto& addItem(T value) {
+    Datum datum;
+    if constexpr (std::is_same_v<T, char*> || std::is_same_v<T, const char*> || std::is_same_v<T, char>)
+      slot->tts_values[current_item_] = DirectFunctionCall3(
+          in_functions[current_item_].fn_addr, CStringGetDatum(value), ObjectIdGetDatum(typioparams[current_item_]),
+          TupleDescAttr(RelationGetDescr(rel_), current_item_)->atttypmod);
+    else  // else check
+      slot->tts_values[current_item_] = value;
 
+    current_item_++;
     return *this;
   }
 
   // ugly code
   template <typename T>
   auto& addItem(const std::optional<T>& value) {
-    curr_cid_++;
-
-    std::string pos;
-    if (curr_cid_ < col_size_)
-      pos = ",";
-    else
-      pos = "";
-
     if (value.has_value()) {
       if constexpr (std::same_as<T, std::string>)
-        sql += std::format("'{}'{}", value.value(), pos);
+        return addItem(value.value().c_str());
       else
-        sql += std::format("{}{}", value.value(), pos);
-    } else
-      sql += std::format("null{}", pos);
+        return addItem(value.value());
+    }
 
+    slot->tts_isnull[current_item_] = true;
+    current_item_++;
     return *this;
   }
 
-  template <typename T>
-    requires(std::is_trivial_v<T>)
-  auto& addItem(T value) {
-    curr_cid_++;
-
-    std::string pos;
-    if (curr_cid_ < col_size_)
-      pos = ",";
-    else
-      pos = "";
-
-    if constexpr (std::is_same_v<T, char*>)
-      sql += std::format("'{}'{}", value, pos);
-    else
-      sql += std::format("{}{}", value, pos);
-
+  auto& start() {
+    ExecClearTuple(slot);
+    MemSet(slot->tts_values, 0, RelationGetDescr(rel_)->natts * sizeof(Datum));
+    /* all tpch table is not null */
+    MemSet(slot->tts_isnull, false, RelationGetDescr(rel_)->natts * sizeof(bool));
+    current_item_ = 0;
     return *this;
   }
 
   auto& end() {
-    sql += ")";
-    if (col_size_ != curr_cid_)
-      throw std::runtime_error("TPCDSTableGenerator internal error");
-    curr_cid_ = 0;
+    ExecStoreVirtualTuple(slot);
 
+    table_tuple_insert(rel_, slot, mycid, ti_options, NULL);
+    // reindex ？
+    // if (rel_->ri_NumIndices > 0)
+    //   recheckIndexes = ExecInsertIndexTuples(rel_, myslot, estate, false, false, NULL, NIL, false);
+
+    row_count_++;
     return *this;
   }
 
   auto row_count() const { return row_count_; }
 
- private:
+  Oid reloid_;
+  Relation rel_;
   std::string table_;
-  std::string sql;
-  size_t col_size_;
-  size_t curr_cid_ = 0;
-  size_t batch_size_;
-  size_t curr_batch_ = 0;
   size_t row_count_ = 0;
+  size_t current_item_ = 0;
+
+  FmgrInfo* in_functions;
+  Oid* typioparams;
+  TupleTableSlot* slot;
+  CommandId mycid = GetCurrentCommandId(true);
+  int ti_options = (TABLE_INSERT_SKIP_FSM | TABLE_INSERT_FROZEN | TABLE_INSERT_NO_LOGICAL);
 };
+
+std::optional<std::string> convert_str(auto date) {
+  return std::format("{}", date);
+}
 
 // dsdgen deliberately creates NULL values if nullCheck(column_id) is true,
 // resolve functions mimic that
@@ -312,15 +316,24 @@ std::optional<std::string> resolve_street_name(int column_id, const ds_addr_t& a
              : std::optional{std::string{address.street_name1} + " " + address.street_name2};
 }
 
-std::optional<float> resolve_gmt_offset(int column_id, int32_t gmt_offset) {
-  return nullCheck(column_id) != 0 ? std::nullopt : std::optional{static_cast<float>(gmt_offset)};
+std::optional<std::string> resolve_gmt_offset(int column_id, int32_t gmt_offset) {
+  if (nullCheck(column_id) != 0) {
+    return std::nullopt;
+  } else {
+    return convert_str(gmt_offset);
+  }
 }
 
-std::optional<float> resolve_decimal(int column_id, decimal_t decimal) {
+std::optional<std::string> resolve_decimal(int column_id, decimal_t decimal) {
   auto result = 0.0;
   dectof(&result, &decimal);
   // we have to divide by 10 after dectof to get the expected result
-  return nullCheck(column_id) != 0 ? std::nullopt : std::optional{static_cast<float>(result / 10)};
+
+  if (nullCheck(column_id) != 0) {
+    return std::nullopt;
+  } else {
+    return std::format("{:.2f}", result / 10);
+  }
 }
 
 int TPCDSTableGenerator::generate_call_center() const {
@@ -328,7 +341,7 @@ int TPCDSTableGenerator::generate_call_center() const {
 
   auto call_center = CALL_CENTER_TBL{};
 
-  TableLoader loader(table_, 31, 100);
+  TableLoader loader(table_);
   call_center.cc_closed_date_id = ds_key_t{-1};
   for (auto call_center_index = ds_key_t{0}; call_center_index < call_center_count; ++call_center_index) {
     // mk_w_call_center needs a pointer to the previous result of
@@ -384,7 +397,7 @@ int TPCDSTableGenerator::generate_catalog_page() const {
       std::snprintf(catalog_page.cp_department, sizeof(catalog_page.cp_department), "%s", "DEPARTMENT");
   // NOLINTEND(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
   // Assert(snprintf_rc > 0, "Unexpected string to parse.");
-  TableLoader loader(table_, 9, 100);
+  TableLoader loader(table_);
 
   for (auto catalog_page_index = ds_key_t{0}; catalog_page_index < catalog_page_count; ++catalog_page_index) {
     // need a pointer to the previous result of mk_w_catalog_page, because
@@ -415,8 +428,8 @@ int TPCDSTableGenerator::generate_catalog_sales_and_returns() const {
   // catalog_sales_count is NOT the actual number of catalog sales created, for each of these "master" catalog_sales
   // multiple "detail" catalog sales are created and possibly returned
 
-  TableLoader loader_catalog_sales("catalog_sales", 34, 100);
-  TableLoader loader_catalog_returns("catalog_returns", 27, 100);
+  TableLoader loader_catalog_sales("catalog_sales");
+  TableLoader loader_catalog_returns("catalog_returns");
 
   for (auto catalog_sale_index = ds_key_t{0}; catalog_sale_index < catalog_sales_count; ++catalog_sale_index) {
     auto catalog_sales = W_CATALOG_SALES_TBL{};
@@ -516,7 +529,7 @@ int TPCDSTableGenerator::generate_catalog_sales_and_returns() const {
 int TPCDSTableGenerator::generate_customer_address() const {
   auto [customer_address_first, customer_address_count] = prepare_for_table(CUSTOMER_ADDRESS);
 
-  TableLoader loader(table_, 13, 100);
+  TableLoader loader(table_);
   for (auto customer_address_index = ds_key_t{0}; customer_address_index < customer_address_count;
        ++customer_address_index) {
     const auto customer_address = call_dbgen_mk<W_CUSTOMER_ADDRESS_TBL, &mk_w_customer_address, CUSTOMER_ADDRESS>(
@@ -549,7 +562,7 @@ int TPCDSTableGenerator::generate_customer_address() const {
 int TPCDSTableGenerator::generate_customer() const {
   auto [customer_first, customer_count] = prepare_for_table(CUSTOMER);
 
-  TableLoader loader(table_, 18, 100);
+  TableLoader loader(table_);
   for (auto customer_index = ds_key_t{0}; customer_index < customer_count; ++customer_index) {
     const auto customer = call_dbgen_mk<W_CUSTOMER_TBL, &mk_w_customer, CUSTOMER>(customer_first + customer_index);
 
@@ -585,7 +598,7 @@ int TPCDSTableGenerator::generate_customer() const {
 int TPCDSTableGenerator::generate_customer_demographics() const {
   auto [customer_demographics_first, customer_demographics_count] = prepare_for_table(CUSTOMER_DEMOGRAPHICS);
 
-  TableLoader loader(table_, 9, 100);
+  TableLoader loader(table_);
   for (auto customer_demographic = ds_key_t{0}; customer_demographic < customer_demographics_count;
        ++customer_demographic) {
     const auto customer_demographics =
@@ -614,7 +627,7 @@ int TPCDSTableGenerator::generate_customer_demographics() const {
 
 int TPCDSTableGenerator::generate_date_dim() const {
   auto [date_first, date_count] = prepare_for_table(DATE);
-  TableLoader loader(table_, 28, 100);
+  TableLoader loader(table_);
   for (auto date_index = ds_key_t{0}; date_index < date_count; ++date_index) {
     const auto date = call_dbgen_mk<W_DATE_TBL, &mk_w_date, DATE>(date_first + date_index);
 
@@ -661,7 +674,7 @@ int TPCDSTableGenerator::generate_date_dim() const {
 int TPCDSTableGenerator::generate_household_demographics() const {
   auto [household_demographics_first, household_demographics_count] = prepare_for_table(HOUSEHOLD_DEMOGRAPHICS);
 
-  TableLoader loader(table_, 5, 100);
+  TableLoader loader(table_);
 
   for (auto household_demographic = ds_key_t{0}; household_demographic < household_demographics_count;
        ++household_demographic) {
@@ -687,7 +700,7 @@ int TPCDSTableGenerator::generate_household_demographics() const {
 
 int TPCDSTableGenerator::generate_income_band() const {
   auto [income_band_first, income_band_count] = prepare_for_table(INCOME_BAND);
-  TableLoader loader(table_, 3, 100);
+  TableLoader loader(table_);
 
   for (auto income_band_index = ds_key_t{0}; income_band_index < income_band_count; ++income_band_index) {
     const auto income_band =
@@ -709,7 +722,7 @@ int TPCDSTableGenerator::generate_income_band() const {
 int TPCDSTableGenerator::generate_inventory() const {
   auto [inventory_first, inventory_count] = prepare_for_table(INVENTORY);
 
-  TableLoader loader(table_, 4, 100);
+  TableLoader loader(table_);
 
   for (auto inventory_index = ds_key_t{0}; inventory_index < inventory_count; ++inventory_index) {
     const auto inventory =
@@ -732,7 +745,7 @@ int TPCDSTableGenerator::generate_inventory() const {
 int TPCDSTableGenerator::generate_item() const {
   auto [item_first, item_count] = prepare_for_table(ITEM);
 
-  TableLoader loader(table_, 22, 100);
+  TableLoader loader(table_);
 
   for (auto item_index = ds_key_t{0}; item_index < item_count; ++item_index) {
     const auto item = call_dbgen_mk<W_ITEM_TBL, &mk_w_item, ITEM>(item_first + item_index);
@@ -772,7 +785,7 @@ int TPCDSTableGenerator::generate_item() const {
 int TPCDSTableGenerator::generate_promotion() const {
   auto [promotion_first, promotion_count] = prepare_for_table(PROMOTION);
 
-  TableLoader loader(table_, 19, 100);
+  TableLoader loader(table_);
 
   for (auto promotion_index = ds_key_t{0}; promotion_index < promotion_count; ++promotion_index) {
     const auto promotion =
@@ -810,7 +823,7 @@ int TPCDSTableGenerator::generate_promotion() const {
 int TPCDSTableGenerator::generate_reason() const {
   auto [reason_first, reason_count] = prepare_for_table(REASON);
 
-  TableLoader loader(table_, 3, 100);
+  TableLoader loader(table_);
 
   for (auto reason_index = ds_key_t{0}; reason_index < reason_count; ++reason_index) {
     const auto reason = call_dbgen_mk<W_REASON_TBL, &mk_w_reason, REASON>(reason_first + reason_index);
@@ -831,7 +844,7 @@ int TPCDSTableGenerator::generate_reason() const {
 int TPCDSTableGenerator::generate_ship_mode() const {
   auto [ship_mode_first, ship_mode_count] = prepare_for_table(SHIP_MODE);
 
-  TableLoader loader(table_, 6, 100);
+  TableLoader loader(table_);
 
   for (auto ship_mode_index = ds_key_t{0}; ship_mode_index < ship_mode_count; ++ship_mode_index) {
     const auto ship_mode =
@@ -857,7 +870,7 @@ int TPCDSTableGenerator::generate_ship_mode() const {
 int TPCDSTableGenerator::generate_store() const {
   auto [store_first, store_count] = prepare_for_table(STORE);
 
-  TableLoader loader(table_, 29, 100);
+  TableLoader loader(table_);
 
   for (auto store_index = ds_key_t{0}; store_index < store_count; ++store_index) {
     const auto store = call_dbgen_mk<W_STORE_TBL, &mk_w_store, STORE>(store_first + store_index);
@@ -904,8 +917,8 @@ int TPCDSTableGenerator::generate_store() const {
 int TPCDSTableGenerator::generate_store_sales_and_returns() const {
   auto [store_sales_first, store_sales_count] = prepare_for_table(STORE_SALES);
 
-  TableLoader loader_store_sales("store_sales", 23, 100);
-  TableLoader loader_store_returns("store_returns", 20, 100);
+  TableLoader loader_store_sales("store_sales");
+  TableLoader loader_store_returns("store_returns");
 
   for (auto store_sale = ds_key_t{0}; store_sale < store_sales_count; ++store_sale) {
     auto store_sales = W_STORE_SALES_TBL{};
@@ -987,7 +1000,7 @@ int TPCDSTableGenerator::generate_store_sales_and_returns() const {
 int TPCDSTableGenerator::generate_time_dim() const {
   auto [time_first, time_count] = prepare_for_table(TIME);
 
-  TableLoader loader(table_, 10, 100);
+  TableLoader loader(table_);
 
   for (auto time_index = ds_key_t{0}; time_index < time_count; ++time_index) {
     const auto time = call_dbgen_mk<W_TIME_TBL, &mk_w_time, TIME>(time_first + time_index);
@@ -1015,7 +1028,7 @@ int TPCDSTableGenerator::generate_time_dim() const {
 int TPCDSTableGenerator::generate_warehouse() const {
   auto [warehouse_first, warehouse_count] = prepare_for_table(WAREHOUSE);
 
-  TableLoader loader(table_, 14, 100);
+  TableLoader loader(table_);
 
   for (auto warehouse_index = ds_key_t{0}; warehouse_index < warehouse_count; ++warehouse_index) {
     const auto warehouse =
@@ -1048,7 +1061,7 @@ int TPCDSTableGenerator::generate_warehouse() const {
 int TPCDSTableGenerator::generate_web_page() const {
   auto [web_page_first, web_page_count] = prepare_for_table(WEB_PAGE);
 
-  TableLoader loader(table_, 14, 100);
+  TableLoader loader(table_);
 
   for (auto web_page_index = ds_key_t{0}; web_page_index < web_page_count; ++web_page_index) {
     const auto web_page = call_dbgen_mk<W_WEB_PAGE_TBL, &mk_w_web_page, WEB_PAGE>(web_page_first + web_page_index);
@@ -1080,8 +1093,8 @@ int TPCDSTableGenerator::generate_web_page() const {
 int TPCDSTableGenerator::generate_web_sales_and_returns() const {
   auto [web_sales_first, web_sales_count] = prepare_for_table(WEB_SALES);
 
-  TableLoader loader_web_sales("web_sales", 34, 100);
-  TableLoader loader_web_returns("web_returns", 24, 100);
+  TableLoader loader_web_sales("web_sales");
+  TableLoader loader_web_returns("web_returns");
 
   for (auto web_sales_index = ds_key_t{0}; web_sales_index < web_sales_count; ++web_sales_index) {
     auto web_sales = W_WEB_SALES_TBL{};
@@ -1177,7 +1190,7 @@ int TPCDSTableGenerator::generate_web_sales_and_returns() const {
 int TPCDSTableGenerator::generate_web_site() const {
   auto [web_site_first, web_site_count] = prepare_for_table(WEB_SITE);
 
-  TableLoader loader(table_, 26, 100);
+  TableLoader loader(table_);
   auto web_site = W_WEB_SITE_TBL{};
   static_assert(sizeof(web_site.web_class) == 51);
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)

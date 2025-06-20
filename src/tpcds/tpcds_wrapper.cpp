@@ -132,9 +132,13 @@ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
   const std::filesystem::path extension_dir = get_extension_external_directory();
   TPCDSTableGenerator generator(scale, table, max_row, extension_dir);
 
-#define CASE(tbl)                 \
-  if (std::string{table} == #tbl) \
-    return generator.generate_##tbl();
+#define CASE(tbl)                             \
+  if (std::string{table} == #tbl) {           \
+    auto result = generator.generate_##tbl(); \
+    Executor executor;                        \
+    executor.execute("reindex table " #tbl);  \
+    return result;                            \
+  }
 
 #define CASE_ERROR(tbl)           \
   if (std::string{table} == #tbl) \
@@ -163,14 +167,23 @@ int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
   CASE_ERROR(store_returns)
   CASE_ERROR(web_returns)
 
-  if (std::string{table} == "catalog_sales")
+  if (std::string{table} == "catalog_sales") {
     return generator.generate_catalog_sales_and_returns();
+    Executor executor;
+    executor.execute("reindex table catalog_sales; reindex table catalog_returns");
+  }
 
-  if (std::string{table} == "store_sales")
+  if (std::string{table} == "store_sales") {
     return generator.generate_store_sales_and_returns();
+    Executor executor;
+    executor.execute("reindex table store_sales; reindex table store_returns");
+  }
 
-  if (std::string{table} == "web_sales")
+  if (std::string{table} == "web_sales") {
     return generator.generate_web_sales_and_returns();
+    Executor executor;
+    executor.execute("reindex table web_sales; reindex table web_returns");
+  }
 
 #undef CASE_ERROR
 #undef CASE
