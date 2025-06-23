@@ -15,6 +15,9 @@ BEGIN
         -- skip child tables
         IF rec.status <> 1 THEN
             query_text := format('SELECT * FROM dsdgen_internal(%s, %L)', sf, rec.table_name);
+            IF dblink_get_connections() @> ARRAY[rec.table_name] THEN
+                PERFORM dblink_disconnect(rec.table_name);
+            END IF;
             PERFORM dblink_connect(rec.table_name, '');
             PERFORM dblink_send_query(rec.table_name, query_text) as int;
             INSERT INTO temp_conn_table VALUES (rec.table_name);
