@@ -36,6 +36,7 @@ target_include_directories(tpcds
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tpcds/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tpcds/include/dsdgen-c
     ${PostgreSQL_SERVER_INCLUDE_DIRS}
+    PUBLIC external/fmt/include
 )
 
 target_compile_options(
@@ -55,6 +56,7 @@ add_postgresql_extension(
 )
 
 target_link_libraries(pg_tpcds tpcds)
+target_compile_definitions(tpcds PRIVATE FMT_HEADER_ONLY=1)
 
 set(TPCDS_CURR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/tpcds)
 set(TPCDS_INSTALL_DIR ${PostgreSQL_EXTENSION_DIR}/src/tpcds)
