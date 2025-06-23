@@ -153,7 +153,7 @@ class TableLoader {
       auto date = date_t{};
       jtodt(&date, static_cast<int>(value));
 
-      auto s = std::format("{:4d}-{:02d}-{:02d}", date.year, date.month, date.day);
+      auto s = fmt::format("{:4d}-{:02d}-{:02d}", date.year, date.month, date.day);
       return addItemInternal(s.data());
     }
   }
