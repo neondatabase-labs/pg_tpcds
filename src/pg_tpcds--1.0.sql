@@ -1,26 +1,44 @@
 CREATE FUNCTION dsdgen_internal(
   IN sf INT,
-  IN gentable TEXT,
-  IN max_rows int DEFAULT -1
+  IN gentable TEXT
 ) RETURNS INT AS 'MODULE_PATHNAME',
 'dsdgen_internal' LANGUAGE C IMMUTABLE STRICT;
 
-CREATE FUNCTION dsdgen(sf INT, max_rows INT DEFAULT -1) RETURNS TABLE(tab TEXT, row_count INT) AS $$
+CREATE FUNCTION dsdgen(sf INT) RETURNS TABLE(tab TEXT, row_count INT) AS $$
 DECLARE
     rec RECORD;
+    rc RECORD;
+    query_text TEXT;
 BEGIN
+    CREATE TEMP TABLE temp_conn_table(conn text);
     FOR rec IN SELECT table_name, status, child FROM tpcds.tpcds_tables LOOP
         -- skip child tables
         IF rec.status <> 1 THEN
-            row_count := dsdgen_internal(sf, rec.table_name, max_rows);
-            tab := rec.table_name;
-            RETURN NEXT;
-            IF rec.status = 2 THEN
-                tab := rec.child;
-                RETURN NEXT;
-            END IF;
+            query_text := format('SELECT * FROM dsdgen_internal(%s, %L)', sf, rec.table_name);
+            PERFORM dblink_connect(rec.table_name, '');
+            PERFORM dblink_send_query(rec.table_name, query_text) as int;
+            INSERT INTO temp_conn_table VALUES (rec.table_name);
         END IF;
     END LOOP;
+
+    for rec in SELECT conn FROM temp_conn_table LOOP
+        for rc in select * from  dblink_get_result(rec.conn) x(a int) loop
+            row_count := rc.a;
+            tab := rec.conn;
+            RETURN NEXT;
+        end loop;
+        PERFORM dblink_disconnect(rec.conn);
+    end loop;
+    drop table temp_conn_table;
+
+    FOR rec IN SELECT table_name, status FROM tpcds.tpcds_tables LOOP
+        EXECUTE 'ANALYZE ' || rec.table_name;
+        IF rec.status = 1 THEN
+            EXECUTE 'select count(*) from' || rec.table_name INTO row_count;
+            tab := rec.table_name;
+            return next;    
+        end IF;
+    end LOOP;
 END;
 $$ LANGUAGE plpgsql;
 

@@ -1,0 +1,13 @@
+{
+  "clangd.arguments": [
+    "-j=12",
+    "--compile-commands-dir=build",
+    "--background-index",
+    "--clang-tidy",
+    "--completion-style=detailed",
+    "--function-arg-placeholders",
+    "--header-insertion=iwyu",
+    "--header-insertion-decorators",
+    "--pch-storage=disk"
+  ]
+}
