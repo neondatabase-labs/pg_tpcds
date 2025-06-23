@@ -20,19 +20,6 @@ src/tpcds/include/schema/
 *.out
 *.app
 
-# Generated files
-tables.h
-streams.h
-columns.h
-tpcds.idx.h
-tpcds.idx
-y.tab.h
-y.tab.c
-y.output
-tokenizer.c
-checksum
-.ctags_updated
-tags
 
 # Flat files
 *.dat

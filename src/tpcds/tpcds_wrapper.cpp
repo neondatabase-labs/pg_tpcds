@@ -129,8 +129,7 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
 }
 
 int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
-  const std::filesystem::path extension_dir = get_extension_external_directory();
-  TPCDSTableGenerator generator(scale, table, max_row, extension_dir);
+  TPCDSTableGenerator generator(scale, table);
 
 #define CASE(tbl)                             \
   if (std::string{table} == #tbl) {           \

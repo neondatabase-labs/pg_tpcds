@@ -92,3 +92,72 @@ NEED ?
 - [ ] support postgres 12 or higher
 - [ ] async dsdgen, need provide a async function to generate data set, or use dblink
     - Avoid relying on other extensions, we can do it ourselves.
+
+
+```sql
+EXPORT DATABASE '/home/asky/xx/sf1' (FORMAT CSV);
+
+
+
+create or replace function table_diff(tablex text) returns int as $$
+declare
+  cnt int;
+begin
+  execute format('select count(*) from (select * from %I except select * from %I)', 'cc_' || tablex, tablex) into cnt;
+  return cnt;
+end;
+$$ language plpgsql;
+
+select tpcds_cleanup();
+
+select * from dsdgen_internal(1, 'call_center', -1);
+select * from table_diff('call_center');
+select * from dsdgen_internal(1, 'catalog_page', -1);
+select * from table_diff('catalog_page');
+select * from dsdgen_internal(1, 'customer_address', -1);
+select * from table_diff('customer_address');
+select * from dsdgen_internal(1, 'customer', -1);
+select * from table_diff('customer');
+select * from dsdgen_internal(1, 'customer_demographics', -1);
+select * from table_diff('customer_demographics');
+select * from dsdgen_internal(1, 'date_dim', -1);
+select * from table_diff('date_dim');
+select * from dsdgen_internal(1, 'household_demographics', -1);
+select * from table_diff('household_demographics');
+select * from dsdgen_internal(1, 'income_band', -1);
+select * from table_diff('income_band');
+select * from dsdgen_internal(1, 'inventory', -1);
+select * from table_diff('inventory');
+select * from dsdgen_internal(1, 'item', -1);
+select * from table_diff('item');
+select * from dsdgen_internal(1, 'promotion', -1);
+select * from table_diff('promotion');
+select * from dsdgen_internal(1, 'reason', -1);
+select * from table_diff('reason');
+select * from dsdgen_internal(1, 'ship_mode', -1);
+select * from table_diff('ship_mode');
+select * from dsdgen_internal(1, 'store', -1); -- error
+select * from table_diff('store');
+select * from dsdgen_internal(1, 'time_dim', -1);
+select * from table_diff('time_dim');
+select * from dsdgen_internal(1, 'warehouse', -1);
+select * from table_diff('warehouse');
+select * from dsdgen_internal(1, 'web_page', -1);
+select * from table_diff('web_page');
+select * from dsdgen_internal(1, 'web_site', -1);
+select * from table_diff('web_site');
+
+select * from dsdgen_internal(1, 'web_sales', -1);
+select * from table_diff('web_sales');
+select * from table_diff('web_returns');
+select * from dsdgen_internal(1, 'store_sales', -1);  -- error
+select * from table_diff('store_sales');
+select * from table_diff('store_returns');
+select * from dsdgen_internal(1, 'catalog_sales', -1);
+select * from table_diff('catalog_sales');
+select * from table_diff('catalog_returns');
+
+
+
+
+```
