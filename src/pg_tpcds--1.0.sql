@@ -15,7 +15,7 @@ BEGIN
         -- skip child tables
         IF rec.status <> 1 THEN
             query_text := format('SELECT * FROM dsdgen_internal(%s, %L)', sf, rec.table_name);
-            IF dblink_get_connections() @> ARRAY[rec.table_name] THEN
+            IF dblink_get_connections() @> ARRAY[rec.table_name::text] THEN
                 PERFORM dblink_disconnect(rec.table_name);
             END IF;
             PERFORM dblink_connect(rec.table_name, '');
