@@ -49,6 +49,7 @@ add_postgresql_extension(
   VERSION 1.0
   SOURCES src/pg_tpcds.cpp
   SCRIPTS src/pg_tpcds--1.0.sql
+  REQUIRES dblink
 )
 
 target_link_libraries(pg_tpcds tpcds)

@@ -38,9 +38,9 @@ static int tpcds_num_queries() {
   return tpcds::TPCDSWrapper::QueriesCount();
 }
 
-static int dsdgen_internal(int scale_factor, char* table, int max_row) {
+static int dsdgen_internal(int scale_factor, char* table) {
   try {
-    return tpcds::TPCDSWrapper::DSDGen(scale_factor, table, max_row);
+    return tpcds::TPCDSWrapper::DSDGen(scale_factor, table);
   } catch (const std::exception& e) {
     elog(ERROR, "TPC-DS Failed to dsdgen, get error: %s", e.what());
   }
@@ -125,9 +125,8 @@ PG_FUNCTION_INFO_V1(dsdgen_internal);
 Datum dsdgen_internal(PG_FUNCTION_ARGS) {
   int sf = PG_GETARG_INT32(0);
   char* table = text_to_cstring(PG_GETARG_TEXT_PP(1));
-  int max_row = PG_GETARG_INT32(2);
 
-  int row_count = tpcds::dsdgen_internal(sf, table, max_row);
+  int row_count = tpcds::dsdgen_internal(sf, table);
 
   PG_RETURN_INT32(row_count);
 }

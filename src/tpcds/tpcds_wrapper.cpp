@@ -128,7 +128,7 @@ tpcds_runner_result *TPCDSWrapper::RunTPCDS(int qid) {
     throw std::runtime_error(std::format("Queries file for qid: {} does not exist", qid));
 }
 
-int TPCDSWrapper::DSDGen(int scale, char *table, int max_row) {
+int TPCDSWrapper::DSDGen(int scale, char *table) {
   TPCDSTableGenerator generator(scale, table);
 
 #define CASE(tbl)                             \
