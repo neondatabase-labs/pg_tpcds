@@ -24,7 +24,8 @@ cmake --build build --target install
 
 ```sql
 -- create extension pg_tpcds;
-create extension pg_tpcds;
+-- need cascade because it depends on extension dblink
+create extension pg_tpcds cascade;
 
 -- generate data set for scale factor 1
 select * from dsdgen(1);
