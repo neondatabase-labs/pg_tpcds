@@ -13,8 +13,6 @@ find_package(PostgreSQL REQUIRED)
 
 add_subdirectory(external/fmt)
 
-add_subdirectory(src)
-
 # clang-format
 add_custom_target(format
   COMMAND git diff --name-only --diff-filter=d --cached '*.cpp' '*.h' | xargs clang-format -i
